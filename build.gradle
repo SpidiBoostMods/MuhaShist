@@ -1,0 +1,52 @@
+plugins { id 'fabric-loom' version '1.9.2' }
+version = project.mod_version
+group = 'net.spidiboost.muhashist'
+base { archivesName = 'muhashist-1.21.4-v' + project.mod_version }
+repositories { mavenCentral() }
+dependencies {
+    minecraft 'com.mojang:minecraft:1.21.4'
+    mappings 'net.fabricmc:yarn:1.21.4+build.8:v2'
+    modImplementation 'net.fabricmc:fabric-loader:0.16.10'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.119.4+1.21.4'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+java { toolchain.languageVersion = JavaLanguageVersion.of(21); withSourcesJar() }
+tasks.withType(JavaCompile).configureEach { options.release = 21; options.encoding = 'UTF-8' }
+tasks.withType(AbstractArchiveTask).configureEach { preserveFileTimestamps = false; reproducibleFileOrder = true }
+tasks.named('jar') { archiveFileName = "muhashist-1.21.4-v${project.version}-dev.jar"; from('LICENSE') }
+tasks.named('remapJar') { archiveFileName = "muhashist-1.21.4-v${project.version}.jar" }
+tasks.named('sourcesJar') { archiveFileName = "muhashist-1.21.4-v${project.version}-sources.jar" }
+test { useJUnitPlatform(); maxHeapSize = '768m'; maxParallelForks = 1; javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) } }
+processResources { inputs.property 'version',project.version; filesMatching('fabric.mod.json') { expand 'version': project.version } }
+apply from: 'updater.gradle'
+sourceSets { runtimeProbe {
+    compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+    runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+} }
+if(project.hasProperty('nativeCheck')) {
+    loom.mods { muhashist { sourceSet sourceSets.main }; muhashist_probe { sourceSet sourceSets.runtimeProbe } }
+    loom.runs { verification {
+        client(); source sourceSets.runtimeProbe; runDir 'build/native'
+        programArgs '--username','MuhaQA','--quickPlaySingleplayer','Muha-QA'
+        vmArgs '-Xmx1G'
+        if(System.getProperty('os.name').startsWith('Mac'))vmArg '-XstartOnFirstThread'
+    } }
+    tasks.named('runVerification',JavaExec) {
+        doFirst {
+            def f=file('build/native/options.txt');f.parentFile.mkdirs()
+            f.text='onboardAccessibility:false\nlang:ru_ru\nmaxFps:60\nrenderDistance:2\nsimulationDistance:5\npauseOnLostFocus:false\nsoundCategory_master:0.0\n'
+            file('build/native/results.txt').delete()
+            file('build/native/config/ms.cfg').delete()
+            file('build/native/config/ms.txt').delete()
+            file('build/native/restart-result.txt').delete()
+        }
+        doLast {
+            def report=file('build/native/results.txt')
+            if(!report.isFile()||!report.text.contains('PASS')||report.text.contains('FAIL'))throw new GradleException('Native verification failed')
+            def marker=file('build/native/restart-result.txt')
+            for(int i=0;i<200&&!marker.isFile();i++)Thread.sleep(50)
+            if(!marker.isFile()||!marker.text.contains('PASS'))throw new GradleException('Native updater restart fixture failed')
+        }
+    }
+}

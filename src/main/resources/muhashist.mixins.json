@@ -1,0 +1,1 @@
+{"required":true,"package":"net.spidiboost.muhashist.mixin","compatibilityLevel":"JAVA_21","client":["NetworkMixin","ChatMixin"],"injectors":{"defaultRequire":1}}

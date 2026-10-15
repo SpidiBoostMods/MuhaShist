@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "muhashist",
+  "version": "${version}",
+  "name": "spidiboost.MuhaShist",
+  "description": "Подсчёт баллов по истории банов ReallyWorld.",
+  "authors": ["SpidiBoost"],
+  "license": "MIT",
+  "environment": "client",
+  "icon": "assets/muhashist/icon.png",
+  "entrypoints": {
+    "preLaunch": ["net.spidiboost.muhashist.updates.ReserveUpdates"],
+    "client": ["net.spidiboost.muhashist.MuhaClient"]
+  },
+  "mixins": ["muhashist.mixins.json"],
+  "depends": {"fabricloader": ">=0.16.10", "minecraft": "1.21.4", "java": ">=21", "fabric-api": "*"},
+  "contact": {
+    "homepage": "https://github.com/SpidiBoostMods/MuhaShist",
+    "sources": "https://github.com/SpidiBoostMods/MuhaShist",
+    "issues": "https://github.com/SpidiBoostMods/MuhaShist/issues"
+  }
+}

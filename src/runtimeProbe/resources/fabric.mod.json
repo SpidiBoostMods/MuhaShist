@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"muhashist_probe","version":"1","environment":"client","entrypoints":{"client":["net.spidiboost.muhashist.qa.NativeProbe"]},"mixins":["muhashist-probe.mixins.json"],"depends":{"muhashist":"*"}}
