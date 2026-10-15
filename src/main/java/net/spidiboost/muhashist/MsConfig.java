@@ -71,6 +71,23 @@ public final class MsConfig {
     } else {
       try {
         rules = ScoreRules.parse(reasons);
+        if (rules.previousDefaults()) {
+          var migrated = new ArrayList<String>();
+          boolean inserted = false;
+          for (String line : rows) {
+            String trimmed = line.strip();
+            if (!trimmed.isEmpty()
+                && !trimmed.startsWith("#")
+                && !SETTING.matcher(trimmed).matches()) {
+              if (!inserted) {
+                migrated.add(String.join("\n\n", ScoreRules.defaults()));
+                inserted = true;
+              }
+            } else migrated.add(line);
+          }
+          atomic(file, String.join("\n", migrated) + "\n");
+          rules = ScoreRules.standard();
+        }
       } catch (IllegalArgumentException e) {
         throw new IOException("ms.cfg: " + e.getMessage());
       }

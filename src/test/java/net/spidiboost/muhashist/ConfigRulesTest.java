@@ -12,6 +12,34 @@ class ConfigRulesTest {
   @TempDir Path directory;
 
   @Test
+  void untouchedPreviousDefaultsMigrateButUserWeightsAndCommentsArePreserved() throws Exception {
+    String extras =
+        "Помеха проверке через AnyDesk; Уклон от проверки; Уклон от проверки (время истекло); Отказ"
+            + " от проверки; Сложился перед проверкой; Ограничение доступа к файлам при проверке;"
+            + " Признание при проверке; Неадекватное поведение при проверке; Использование батников"
+            + " для чистки следов ПО; Хранение батников для чистки следов";
+    String old =
+        "# GUI\nhudX=12\nhudY=34\nclear=false\nclearEvery=7\n# Причины\n"
+            + ScoreRules.defaults().getFirst().replace(" - 1.0", "; " + extras + " - 1.0")
+            + "\n"
+            + ScoreRules.defaults().get(1)
+            + "\n# мой комментарий\n";
+    Files.writeString(directory.resolve("ms.cfg"), old);
+    var migrated = new MsConfig(directory);
+    assertEquals(12, migrated.x());
+    assertEquals(34, migrated.y());
+    assertFalse(migrated.clear());
+    assertEquals(7, migrated.every());
+    assertEquals(BigDecimal.ZERO, migrated.rules().score("Уклон от проверки"));
+    assertTrue(Files.readString(migrated.file()).contains("# мой комментарий"));
+    String custom = old.replace(" - 1.0", " - 2.0");
+    Files.writeString(directory.resolve("ms.cfg"), custom);
+    var kept = new MsConfig(directory);
+    assertEquals(new BigDecimal("2"), kept.rules().score("Уклон от проверки"));
+    assertEquals(custom, Files.readString(kept.file()));
+  }
+
+  @Test
   void reasonsUseSemicolonsAndKeepInternalCommasAndDecimalPrecision() throws Exception {
     Path file = directory.resolve("ms.cfg");
     String text =

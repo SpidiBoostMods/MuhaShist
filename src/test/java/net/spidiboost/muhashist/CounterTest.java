@@ -166,8 +166,8 @@ class CounterTest {
     run.counter.accept(
         "-- [2026-10-02 12:00] --\r\n"
             + "Nick был забанен куратором SpidiBoost\r\n"
-            + "По причине: Ограничение доступа");
-    run.counter.accept("к файлам при проверке [Истёк]\nОкончание в 5 дней");
+            + "По причине: Ограничение доступа администрации");
+    run.counter.accept("к файлам/папкам во время проверки [Истёк]\nОкончание в 5 дней");
     run.end();
     assertEquals("1", run.result.points());
   }
@@ -265,7 +265,7 @@ class CounterTest {
       String reason =
           kind == 1
               ? "Тиммейт читера"
-              : kind == 2 ? "Хранение читов" : kind == 3 ? "Уклон от проверки" : "Читы";
+              : kind == 2 ? "Хранение читов" : kind == 3 ? "Лив с проверки" : "Читы";
       run.ban(name, staff, reason, date);
       if (kind == 6) run.unban(name, "Moderator");
       if (kind == 7) run.unban(name, "ReallyWorld");
