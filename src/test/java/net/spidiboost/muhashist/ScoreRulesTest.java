@@ -61,7 +61,6 @@ class ScoreRulesTest {
             "teamcheat",
             "teaming with cheater",
             "playing with a cheater",
-            "Читы // rec",
             "Тиммейт читера by Admin")) assertEquals(7, ScoreRules.tenths(reason), reason);
   }
 
@@ -75,6 +74,8 @@ class ScoreRulesTest {
             "Реклама",
             "ЧСП",
             "Пиар читов",
+            "Читы // rec",
+            "Читы на рыбалке вручную",
             "Не читы",
             "Не читер",
             "Некорректный ник",

@@ -8,6 +8,8 @@
 - Never modify the user's Prism instance, live game, recording or other projects.
 - Verify at least 100000 records, native HUD/drag/config/commands, updater transaction, and Windows/macOS/Linux CI before release.
 - Preserve individual repeated bans. Manual unban excludes one corresponding ban; ReallyWorld neither adds points nor changes its reason weight.
-- Exact tenths: cheats/team cheats 7, listed inspection/storage/mod reasons 10. Only the requested curator and dates on/after the cutoff.
+- Exact decimal weights from ms.cfg. Defaults: cheats/team cheats 0.7, inspection/storage/mod reasons 1.0. Only the requested curator and dates on/after the cutoff.
+- Capture raw server messages before chat-panel routing. Confirm each active ban through a sequential owned checkban reply; exclude silent bans. Inactive bans need no checkban.
+- Config comments are player-facing sections. Preserve custom reason lines and comments when saving GUI or clear settings.
 - Use the current instance's Fabric config directory for ms.cfg and ms.txt.
 - Publish source, canonical JAR and verified manifest on GitHub. Never publish live logs, configurations, accounts or launcher arguments.

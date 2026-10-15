@@ -94,14 +94,17 @@ public final class MsHud {
           y + 34,
           0xb6aab9);
     String detail =
-        !scan.headerSeen()
-            ? "Ожидаем /shist…"
-            : scan.target().isEmpty() ? "Получаем историю…" : scan.target();
+        scan.checking()
+            ? "/checkban " + scan.target() + " · " + scan.checked() + "/" + scan.checkCount()
+            : !scan.headerSeen()
+                ? "Ожидаем /shist…"
+                : scan.target().isEmpty() ? "Получаем историю…" : scan.target();
     c.drawTextWithShadow(
         client.textRenderer, Text.literal(fit(detail, w - 20)), x + 10, y + 47, 0xa8acbd);
     int length = w - 20;
     c.fill(x + 10, y + 61, x + w - 10, y + 64, 0xff31313e);
-    double total = scan.expected().doubleValue(), ratio = total > 0 ? scan.processed() / total : 0;
+    double total = scan.checking() ? scan.checkCount() : scan.expected().doubleValue(),
+        ratio = total > 0 ? (scan.checking() ? scan.checked() : scan.processed()) / total : 0;
     int filled = (int) (length * Math.max(0, Math.min(1, ratio)));
     if (!scan.headerSeen()) {
       int p = (int) (System.nanoTime() / 30_000_000 % Math.max(1, length));

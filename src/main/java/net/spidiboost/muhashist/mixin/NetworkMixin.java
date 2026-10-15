@@ -10,13 +10,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPlayNetworkHandler.class)
 public final class NetworkMixin {
-  @Inject(method = "onGameMessage", at = @At("HEAD"))
-  private void muhashist$receive(GameMessageS2CPacket packet, CallbackInfo ci) {
-    if (MinecraftClient.getInstance().isOnThread()
-        && !packet.overlay()
-        && MuhaClient.INSTANCE != null) MuhaClient.INSTANCE.receive(packet.content().getString());
-  }
-
   @Inject(method = "onGameMessage", at = @At("TAIL"))
   private void muhashist$clear(GameMessageS2CPacket packet, CallbackInfo ci) {
     if (MinecraftClient.getInstance().isOnThread() && MuhaClient.INSTANCE != null)

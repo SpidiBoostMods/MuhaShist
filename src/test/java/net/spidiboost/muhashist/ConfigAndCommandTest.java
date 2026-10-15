@@ -18,7 +18,7 @@ class ConfigAndCommandTest {
     assertEquals(
         new BigInteger("9".repeat(100)),
         MsCommand.parse("SpidiBoost " + "9".repeat(100) + " 1 10 26").limit());
-    for (String nick : new String[] {"open", "update", "clear", "stop"})
+    for (String nick : new String[] {"open", "update", "clear", "stop", "config"})
       assertEquals(MsCommand.Action.START, MsCommand.parse(nick + " 100 1.10.26").action());
     assertEquals(MsCommand.Action.UPDATE, MsCommand.parse("update off").action());
     assertEquals("21", MsCommand.parse("clear 21").value());
@@ -52,7 +52,8 @@ class ConfigAndCommandTest {
     Files.writeString(directory.resolve("other.cfg"), "untouched");
     loaded.save();
     assertEquals("untouched", Files.readString(directory.resolve("other.cfg")));
-    assertFalse(Files.readString(directory.resolve("ms.cfg")).contains("#"));
+    assertTrue(Files.readString(directory.resolve("ms.cfg")).contains("# Положение GUI"));
+    assertTrue(Files.readString(directory.resolve("ms.cfg")).contains("# Причины и баллы"));
   }
 
   @Test

@@ -20,6 +20,9 @@ import net.spidiboost.muhashist.updates.*;
 
 public final class NativeProbe implements ClientModInitializer {
   public static final List<String> sent = new ArrayList<>();
+  public static final ArrayDeque<String> pendingChecks = new ArrayDeque<>();
+  public static boolean routeMessages;
+  public static long primaryMessages, staffMessages;
   private int phase, frames, produced;
   private long started = System.nanoTime(), stopped;
   private Path report;
@@ -41,7 +44,8 @@ public final class NativeProbe implements ClientModInitializer {
   }
 
   private static void receive(MinecraftClient client, String value) {
-    client.getNetworkHandler().onGameMessage(new GameMessageS2CPacket(Text.literal(value), false));
+    net.spidiboost.muhashist.qa.mixin.PacketAccess.muhaqa$dispatch(
+        new GameMessageS2CPacket(Text.literal(value), false), client.getNetworkHandler());
   }
 
   private static String ban(int i) {
@@ -72,6 +76,18 @@ public final class NativeProbe implements ClientModInitializer {
         throw new AssertionError("Native fixture exceeded eight minutes");
       if (client.player == null || client.player.age < 40 || client.getOverlay() != null) return;
       var mod = MuhaClient.INSTANCE;
+      if (!pendingChecks.isEmpty()) {
+        String name = pendingChecks.removeFirst();
+        receive(
+            client,
+            "Цель ["
+                + name
+                + "]: забанена.\nЗабанил: "
+                + (name.equals("Wrong") ? "Other" : "SpidiBoost")
+                + "\nIP бан: no, Тихий: "
+                + (name.equals("Silent") ? "yes" : "no")
+                + ", Навсегда: no");
+      }
       if (phase == 0) {
         if (client.currentScreen != null) return;
         report = client.runDirectory.toPath().resolve("results.txt");
@@ -84,7 +100,7 @@ public final class NativeProbe implements ClientModInitializer {
                   .getReader()
                   .canRead(),
               "greedy date parse");
-          for (String nick : List.of("open", "update", "clear", "stop"))
+          for (String nick : List.of("open", "update", "clear", "stop", "config"))
             require(
                 !dispatcher.parse(alias + " " + nick + " 100 1.10.26", null).getReader().canRead(),
                 "reserved nickname parse");
@@ -104,6 +120,23 @@ public final class NativeProbe implements ClientModInitializer {
         require(!cfg.clear() && cfg.every() == 7, "persistent clear settings");
         mod.execute("clear on");
         mod.execute("clear 20");
+        Path configFile = cfg.file();
+        String initialConfig = Files.readString(configFile);
+        Files.writeString(configFile, initialConfig + "\nПроверка, запятая - 0,125\n");
+        mod.execute("config reload");
+        require(
+            mod.config().rules().score("Проверка, запятая").toPlainString().equals("0.125"),
+            "config reload did not load decimal rule");
+        var goodConfig = mod.config();
+        Files.writeString(configFile, "# Причины\nbad\n");
+        mod.execute("config load");
+        require(mod.config() == goodConfig, "bad reload replaced working config");
+        Files.writeString(configFile, initialConfig);
+        mod.execute("config load");
+        pass(
+            "config reload/load, decimal comma and reason comma; invalid reload keeps previous"
+                + " settings");
+        routeMessages = true;
         client.getNetworkHandler().sendChatCommand("MS SpidiBoost 100000 1 октября 26");
         require(
             sent.equals(List.of("shist SpidiBoost ban 100000")),
@@ -116,6 +149,9 @@ public final class NativeProbe implements ClientModInitializer {
             "real command fallback, both aliases, greedy dates/reserved nicknames, TAB and"
                 + " persistent clear settings; exactly one shist and no checkban/checkmute");
       } else if (phase == 1) {
+        require(
+            mod.counter().active() || mod.counter().processed() >= 6,
+            "raw packet capture failed before chat-panel cancellation");
         if (mod.counter().processed() < 6) return;
         receive(client, "Окончание в 1 день");
         client.setScreen(new ChatScreen(""));
@@ -194,6 +230,10 @@ public final class NativeProbe implements ClientModInitializer {
         pass(
             "100000 records through real game-message mixin and sliced UI queue: 85000 exact"
                 + " points, repeated names retained, actual chat clears, 4-field ms.txt saved");
+        require(primaryMessages > 0 && staffMessages > 0, "both routed panels not exercised");
+        pass(
+            "raw packet capture precedes two chat-panel routes, including cancelled vanilla game"
+                + " messages");
         client.getNetworkHandler().sendChatCommand("muhashist SpidiBoost 100 01.10.2026");
         receive(client, "История персонала SpidiBoost (Лимит: 100):");
         receive(client, ban(0));
@@ -207,6 +247,43 @@ public final class NativeProbe implements ClientModInitializer {
         receive(client, ban(1));
         require(mod.counter().processed() == count, "late packet changed stopped result");
         pass("stop checkpoints partial result and rejects late packets");
+        client.getNetworkHandler().sendChatCommand("ms SpidiBoost 20 1.10.2026");
+        receive(client, "История персонала SpidiBoost (Лимит: 20):");
+        StringBuilder advanced = new StringBuilder();
+        for (String name : List.of("Keep", "Silent", "Wrong"))
+          advanced
+              .append("-- [2026-10-02 12:00] --\n")
+              .append(name)
+              .append(" был забанен куратором SpidiBoost\nПо причине: Читы [Активный]\n");
+        advanced.append(
+            "-- [2026-10-02 12:01] --\n"
+                + "Expired был забанен куратором SpidiBoost\n"
+                + "По причине: Хранение читов [Истёк]\n");
+        for (String time : List.of("12:00", "12:05", "12:11"))
+          advanced
+              .append("-- [2026-10-02 ")
+              .append(time)
+              .append(
+                  "] --\n"
+                      + "Fish был забанен куратором SpidiBoost\n"
+                      + "По причине: cheat [auto-fish] [Истёк]\n");
+        receive(client, advanced.toString());
+        phase = 5;
+      } else if (phase == 5) {
+        if (mod.counter().active()) return;
+        require(mod.counter().points().equals("3,1"), "active/silent/owner/autofish native total");
+        require(
+            sent.stream()
+                .filter(s -> s.startsWith("checkban "))
+                .toList()
+                .equals(List.of("checkban Keep", "checkban Silent", "checkban Wrong")),
+            "active-only sequential commands or unexpected check for expired/autofish");
+        Path reportFile = FabricLoader.getInstance().getConfigDir().resolve("ms.txt");
+        if (!Files.readString(reportFile).contains("Баллы: 3,1")) return;
+        pass(
+            "actual active-only checkban commands, foreign curator/silent filtering, inactive score"
+                + " and ten-minute autofish grouping");
+        routeMessages = false;
         prepareUpdate(client);
         phase = 99;
       }

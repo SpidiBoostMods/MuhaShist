@@ -46,20 +46,27 @@ public final class MsFiles {
 
   public void open() throws IOException {
     ensure();
+    open(file);
+  }
+
+  public static void open(Path file) throws IOException {
     if (Files.isSymbolicLink(file))
-      throw new IOException("ms.txt не должен быть символической ссылкой.");
+      throw new IOException("Файл не должен быть символической ссылкой.");
     String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
     if (os.contains("mac")) {
       new ProcessBuilder("open", "-a", "TextEdit", file.toAbsolutePath().toString()).start();
       return;
     }
-    if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-      Desktop.getDesktop().open(file.toFile());
-      return;
-    }
     if (os.startsWith("windows")) {
       new ProcessBuilder("notepad.exe", file.toAbsolutePath().toString()).start();
       return;
+    }
+    if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+      try {
+        Desktop.getDesktop().open(file.toFile());
+        return;
+      } catch (IOException ignored) {
+      }
     }
     new ProcessBuilder("xdg-open", file.toAbsolutePath().toString()).start();
   }

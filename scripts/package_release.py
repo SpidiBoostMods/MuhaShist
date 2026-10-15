@@ -54,6 +54,9 @@ with ZipFile(jar) as archive:
     assert "LICENSE" in archive.namelist()
     assert not any("/qa/" in entry for entry in archive.namelist())
     assert "net/spidiboost/muhashist/HistoryCounter.class" in archive.namelist()
+    assert "net/spidiboost/muhashist/CheckReply.class" in archive.namelist()
+    assert "net/spidiboost/muhashist/mixin/IncomingMixin.class" in archive.namelist()
+    assert "IncomingMixin" in json.loads(archive.read("muhashist.mixins.json"))["client"]
     for entry in archive.namelist():
         if entry.endswith(".class"):
             assert int.from_bytes(archive.read(entry)[6:8], "big") == 65

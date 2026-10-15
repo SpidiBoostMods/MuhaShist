@@ -12,6 +12,7 @@ public record MsCommand(
     STOP,
     OPEN,
     UPDATE,
+    CONFIG,
     CLEAR
   }
 
@@ -27,9 +28,16 @@ public record MsCommand(
             case "stop" -> Action.STOP;
             case "update" -> Action.UPDATE;
             case "clear" -> Action.CLEAR;
+            case "config" -> Action.CONFIG;
             default -> null;
           };
       if (action != null) return simple(action, "");
+    }
+    if (parts.length == 2 && first.equals("config")) {
+      String value = parts[1].toLowerCase(Locale.ROOT);
+      if (!java.util.Set.of("dir", "reload", "load").contains(value))
+        throw new IllegalArgumentException("Конфиг: /ms config dir, reload или load.");
+      return simple(Action.CONFIG, value);
     }
     if (parts.length == 2 && (first.equals("update") || first.equals("clear"))) {
       String value = parts[1].toLowerCase(Locale.ROOT);

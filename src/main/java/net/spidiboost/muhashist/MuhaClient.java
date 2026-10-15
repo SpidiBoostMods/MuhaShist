@@ -13,8 +13,11 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.spidiboost.muhashist.updates.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class MuhaClient implements ClientModInitializer {
+  private static final Logger LOG = LoggerFactory.getLogger("MuhaShist");
   public static MuhaClient INSTANCE;
   private MinecraftClient client;
   private MsConfig config;
@@ -44,14 +47,25 @@ public final class MuhaClient implements ClientModInitializer {
     try {
       config = new MsConfig(directory);
     } catch (Exception e) {
-      configError = e.getMessage();
+      configError = e.getMessage() == null ? "Не удалось прочитать config/ms.cfg." : e.getMessage();
     }
     if (config != null) hud = new MsHud(config);
     scan =
         new HistoryCounter(
             new HistoryCounter.Listener() {
               public void clearChat() {
-                if (receivedBans < scan.processed()) clearRequested = true;
+                clearRequested = true;
+              }
+
+              public void check(String nickname) {
+                try {
+                  if (client.getNetworkHandler() == null)
+                    throw new IllegalStateException("Соединение потеряно.");
+                  LOG.debug("Checking active ban: {}", nickname);
+                  client.getNetworkHandler().sendChatCommand("checkban " + nickname);
+                } catch (Exception e) {
+                  scan.stop("Не удалось отправить /checkban " + nickname + ": " + e.getMessage());
+                }
               }
 
               public void finished(HistoryCounter.Result result, String error) {
@@ -105,7 +119,8 @@ public final class MuhaClient implements ClientModInitializer {
                             var offset = builder.createOffset(builder.getStart() + last + 1);
                             String part = text.substring(last + 1).toLowerCase(Locale.ROOT);
                             if (last < 0) {
-                              for (String value : List.of("open", "stop", "clear", "update"))
+                              for (String value :
+                                  List.of("open", "stop", "clear", "update", "config"))
                                 if (value.startsWith(part)) offset.suggest(value);
                               var network = MinecraftClient.getInstance().getNetworkHandler();
                               if (network != null)
@@ -117,6 +132,9 @@ public final class MuhaClient implements ClientModInitializer {
                                           if (name.toLowerCase(Locale.ROOT).startsWith(part))
                                             offset.suggest(name);
                                         });
+                            } else if (text.matches("(?i)config\\s+\\S*")) {
+                              for (String value : List.of("dir", "reload", "load"))
+                                if (value.startsWith(part)) offset.suggest(value);
                             } else if (text.matches("(?i)(?:update|clear)\\s+\\S*")) {
                               for (String value : List.of("on", "off"))
                                 if (value.startsWith(part)) offset.suggest(value);
@@ -166,6 +184,7 @@ public final class MuhaClient implements ClientModInitializer {
                 });
         case CLEAR -> clear(command.value());
         case UPDATE -> update(command.value());
+        case CONFIG -> configure(command.value());
       }
     } catch (Exception e) {
       error(e.getMessage() == null ? "Не удалось выполнить команду." : e.getMessage());
@@ -173,16 +192,23 @@ public final class MuhaClient implements ClientModInitializer {
   }
 
   private void start(MsCommand command) {
+    if (scan.active()) throw new IllegalStateException("Подсчёт уже идёт. Остановить: /ms stop.");
     if (!configError.isEmpty())
       throw new IllegalStateException(
-          configError + " Исправьте config/ms.cfg и перезапустите игру.");
+          configError + " Исправьте config/ms.cfg и выполните /ms config reload.");
     if (client.player == null || client.getNetworkHandler() == null)
       throw new IllegalStateException("Сначала зайдите на сервер.");
     String outgoing = "shist " + command.nickname() + " ban " + command.limit();
     if (outgoing.length() > 256)
       throw new IllegalArgumentException(
           "Число слишком длинное для сетевой команды Minecraft (256 символов).");
+    scan.scoring(config.rules(), config.fishMillis());
     scan.start(command.nickname(), command.limit(), command.since());
+    LOG.info(
+        "History started: curator={}, limit={}, since={}",
+        command.nickname(),
+        command.limit(),
+        command.since());
     incoming.clear();
     receivedBans = 0;
     connection = client.getNetworkHandler();
@@ -196,6 +222,33 @@ public final class MuhaClient implements ClientModInitializer {
     scan.clearing(config.clear(), config.every());
     message(
         "Очистка " + (config.clear() ? "вкл" : "выкл") + " · каждые " + config.every() + " банов.");
+  }
+
+  private void configure(String value) throws Exception {
+    if (value.equals("dir")) {
+      Path file = FabricLoader.getInstance().getConfigDir().resolve("ms.cfg");
+      io.execute(
+          () -> {
+            try {
+              if (!Files.exists(file)) new MsConfig(file.getParent());
+              MsFiles.open(file);
+            } catch (Exception e) {
+              errorAsync("Не удалось открыть ms.cfg: " + e.getMessage());
+            }
+          });
+      return;
+    }
+    if (value.isEmpty()) {
+      message("/ms config dir · reload · load");
+      return;
+    }
+    var loaded = new MsConfig(FabricLoader.getInstance().getConfigDir());
+    config = loaded;
+    hud = new MsHud(config);
+    configError = "";
+    scan.clearing(config.clear(), config.every());
+    message(
+        scan.active() ? "Конфиг загружен. Причины — со следующей проверки." : "Конфиг загружен.");
   }
 
   private void update(String value) throws Exception {
@@ -216,9 +269,20 @@ public final class MuhaClient implements ClientModInitializer {
     message("/ms open · /ms stop");
     message("/ms clear on|off|число");
     message("/ms update [on|off]");
+    message("/ms config dir|reload|load");
   }
 
   private void complete(HistoryCounter.Result result, String problem) {
+    LOG.info(
+        "History finished: curator={}, processed={}, checks={}, counted={}, points={}, complete={},"
+            + " problem={}",
+        result.curator(),
+        result.processed(),
+        scan.checked(),
+        result.counted(),
+        result.points(),
+        result.complete(),
+        problem);
     incoming.clear();
     clearChat();
     displayUntil = now() + 3500;

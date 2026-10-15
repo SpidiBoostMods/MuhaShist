@@ -11,6 +11,7 @@ class CounterTest {
   static final class Run implements HistoryCounter.Listener {
     long time;
     int clears;
+    final List<String> requested = new ArrayList<>();
     String error = "";
     HistoryCounter.Result result;
     final HistoryCounter counter = new HistoryCounter(this, () -> time);
@@ -20,6 +21,11 @@ class CounterTest {
     }
 
     Run(String count) {
+      this(count, ScoreRules.standard(), 600000);
+    }
+
+    Run(String count, ScoreRules rules, long fishWindow) {
+      counter.scoring(rules, fishWindow);
       counter.start("SpidiBoost", new BigInteger(count), LocalDate.of(2026, 10, 1));
       counter.accept(
           "§6[12:00:00] История персонала SpidiBoost (Лимит: " + count + "): [CopyFull]");
@@ -50,6 +56,10 @@ class CounterTest {
 
     public void clearChat() {
       clears++;
+    }
+
+    public void check(String name) {
+      requested.add(name);
     }
 
     public void finished(HistoryCounter.Result result, String error) {
@@ -85,6 +95,13 @@ class CounterTest {
         "-- [2026-10-02 10:00] --\n"
             + "Role был забанен модератором SpidiBoost\n"
             + "По причине: Читы [Активный]");
+    run.time += 2000;
+    run.counter.tick();
+    assertEquals(List.of("Active"), run.requested);
+    run.counter.accept(
+        "Цель [Active]: забанена.\nЗабанил: SpidiBoost\nIP бан: no, Тихий: no, Навсегда: no");
+    run.time += 101;
+    run.counter.tick();
     run.end();
     assertEquals(List.of("Cutoff", "Active"), run.result.names());
     assertEquals("1,4", run.result.points());
