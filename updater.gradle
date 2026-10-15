@@ -12,3 +12,4 @@ def agent = tasks.register('sharedAgentJar',Jar) {
 processResources { from(agent) }
 jar { from(sourceSets.sharedAgent.output) }
 test { dependsOn agent }
+tasks.named('sourcesJar') { from sourceSets.sharedAgent.allSource }

@@ -17,6 +17,7 @@ tasks.withType(AbstractArchiveTask).configureEach { preserveFileTimestamps = fal
 tasks.named('jar') { archiveFileName = "muhashist-1.21.4-v${project.version}-dev.jar"; from('LICENSE') }
 tasks.named('remapJar') { archiveFileName = "muhashist-1.21.4-v${project.version}.jar" }
 tasks.named('sourcesJar') { archiveFileName = "muhashist-1.21.4-v${project.version}-sources.jar" }
+tasks.named('remapSourcesJar') { archiveFileName = "muhashist-1.21.4-v${project.version}-sources.jar" }
 test { useJUnitPlatform(); maxHeapSize = '768m'; maxParallelForks = 1; javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) } }
 processResources { inputs.property 'version',project.version; filesMatching('fabric.mod.json') { expand 'version': project.version } }
 apply from: 'updater.gradle'

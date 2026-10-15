@@ -32,6 +32,11 @@ version = re.search(
 ).group(1)
 stem = f"muhashist-1.21.4-v{version}"
 jar = root / "build/libs" / f"{stem}.jar"
+sources = root / "build/libs" / f"{stem}-sources.jar"
+
+with ZipFile(sources) as archive:
+    assert "net/spidiboost/muhashist/MuhaClient.java" in archive.namelist()
+    assert "net/spidiboost/muhashist/updates/BatchAgent.java" in archive.namelist()
 
 for folder in ("src", "tools"):
     for source in (root / folder).rglob("*.java"):
