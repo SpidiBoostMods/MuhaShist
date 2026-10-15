@@ -12,6 +12,7 @@ class CounterTest {
     long time;
     int clears;
     final List<String> requested = new ArrayList<>();
+    final List<Long> requestedAt = new ArrayList<>();
     String error = "";
     HistoryCounter.Result result;
     final HistoryCounter counter = new HistoryCounter(this, () -> time);
@@ -60,6 +61,7 @@ class CounterTest {
 
     public void check(String name) {
       requested.add(name);
+      requestedAt.add(time);
     }
 
     public void finished(HistoryCounter.Result result, String error) {

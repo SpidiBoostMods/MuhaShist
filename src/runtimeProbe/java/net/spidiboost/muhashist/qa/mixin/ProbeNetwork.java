@@ -16,6 +16,11 @@ public final class ProbeNetwork {
       ci.cancel();
     }
     if (command.startsWith("checkban ")) {
+      if (!NativeProbe.pendingChecks.isEmpty()
+          || NativeProbe.checkTimes.size()
+              != net.spidiboost.muhashist.MuhaClient.INSTANCE.counter().checked())
+        throw new AssertionError("checkban sent before previous reply completed");
+      NativeProbe.checkTimes.add(System.nanoTime() / 1_000_000);
       NativeProbe.sent.add(command);
       NativeProbe.pendingChecks.addLast(command.substring("checkban ".length()));
       ci.cancel();

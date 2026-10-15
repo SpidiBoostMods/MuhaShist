@@ -17,6 +17,7 @@ class ScoreRulesTest {
             "Помеха проверке через AnyDesk, было выдано предупреждение",
             "Помеха проведению проверки",
             "Лив с проверки",
+            "Уклон от проверки",
             "Отказ от прохождения проверки",
             "Чистка перед проверкой",
             "Сложился при проверке",
@@ -91,12 +92,11 @@ class ScoreRulesTest {
   void oldExtraReasonsAreNotSilentlyAddedToNewDefaults() {
     for (String reason :
         List.of(
-            "Уклон от проверки",
             "Помеха проверке через AnyDesk",
             "Сложился перед проверкой",
             "Признание при проверке",
             "Хранение батников для чистки следов"))
       assertEquals(0, ScoreRules.tenths(reason), reason);
-    assertEquals(17, ScoreRules.defaults().getFirst().split(" - ")[0].split(";").length);
+    assertEquals(18, ScoreRules.defaults().getFirst().split(" - ")[0].split(";").length);
   }
 }

@@ -46,6 +46,12 @@ class ActiveAndFishTest {
   }
 
   private void response(CounterTest.Run run, String name, String staff, String silent) {
+    answer(run, name, staff, silent);
+    run.time += 100;
+    run.counter.tick();
+  }
+
+  private void answer(CounterTest.Run run, String name, String staff, String silent) {
     run.counter.accept(
         "Цель ["
             + name
@@ -54,13 +60,118 @@ class ActiveAndFishTest {
             + "\nIP бан: no, Тихий: "
             + silent
             + ", Навсегда: no");
-    run.time += 101;
-    run.counter.tick();
   }
 
   private void seal(CounterTest.Run run) {
     run.time += 2000;
     run.counter.tick();
+  }
+
+  @Test
+  void hundredMillisAreMeasuredBetweenSendsAndSlowRepliesAddNoExtraPause() {
+    var run = new CounterTest.Run();
+    for (String name : List.of("Fast", "Slow", "Last"))
+      active(run, name, "Уклон от проверки", "2026-10-02 12:00");
+    seal(run);
+    run.time += 20;
+    answer(run, "Fast", "SpidiBoost", "no");
+    run.counter.tick();
+    assertEquals(List.of(2000L), run.requestedAt);
+    run.time += 79;
+    run.counter.tick();
+    assertEquals(1, run.requested.size());
+    run.time++;
+    run.counter.tick();
+    assertEquals(List.of(2000L, 2100L), run.requestedAt);
+    run.time += 350;
+    answer(run, "Slow", "SpidiBoost", "no");
+    assertEquals(2, run.requested.size());
+    run.counter.tick();
+    assertEquals(List.of(2000L, 2100L, 2450L), run.requestedAt);
+    answer(run, "Last", "SpidiBoost", "no");
+    run.counter.tick();
+    assertNotNull(run.result);
+    assertEquals("3", run.result.points());
+    assertEquals(2450, run.time);
+  }
+
+  @Test
+  void elapsedSendIntervalNeverAllowsAnotherPlayerBeforeCompleteReply() {
+    var run = new CounterTest.Run();
+    active(run, "Pending", "Уклон от проверки", "2026-10-02 12:00");
+    active(run, "Later", "Уклон от проверки", "2026-10-02 12:00");
+    seal(run);
+    run.counter.accept("Цель [Pending]: забанена.\nЗабанил: SpidiBoost");
+    run.time += 500;
+    run.counter.tick();
+    assertEquals(List.of("Pending"), run.requested);
+    assertEquals("0", run.counter.points());
+    run.counter.accept("Тихий: no\nНавсегда: no");
+    assertEquals(1, run.requested.size());
+    run.counter.tick();
+    assertEquals(List.of("Pending", "Later"), run.requested);
+    answer(run, "Pending", "SpidiBoost", "no");
+    assertEquals("1", run.counter.points());
+    answer(run, "Later", "SpidiBoost", "yes");
+    run.counter.tick();
+    assertEquals(List.of("Pending"), run.result.names());
+  }
+
+  @Test
+  void spacingUsesRetrySendTimeNotTheOriginalRequestTime() {
+    var run = new CounterTest.Run();
+    active(run, "Retry", "Уклон от проверки", "2026-10-02 12:00");
+    active(run, "Next", "Уклон от проверки", "2026-10-02 12:00");
+    seal(run);
+    run.time += 6000;
+    run.counter.tick();
+    assertEquals(List.of("Retry", "Retry"), run.requested);
+    run.time += 25;
+    answer(run, "Retry", "SpidiBoost", "no");
+    run.counter.tick();
+    run.time += 74;
+    run.counter.tick();
+    assertEquals(2, run.requested.size());
+    run.time++;
+    run.counter.tick();
+    assertEquals(List.of(2000L, 8000L, 8100L), run.requestedAt);
+    answer(run, "Next", "SpidiBoost", "no");
+    run.counter.tick();
+    assertEquals("2", run.result.points());
+  }
+
+  @Test
+  void hundredThousandChecksKeepSendSpacingAcrossVariableLatency() {
+    var run = new CounterTest.Run();
+    int[] delays = {0, 5, 20, 50, 99, 100, 101, 350, 1000, 5000};
+    for (int i = 0; i < 100000; i++)
+      active(run, "Same" + (i % 17), "Уклон от проверки", "2026-10-02 12:00");
+    seal(run);
+    long expectedSent = run.time;
+    for (int i = 0; i < 100000; i++) {
+      assertEquals(i + 1, run.requested.size());
+      assertEquals(expectedSent, run.requestedAt.get(i));
+      int delay = delays[i % delays.length];
+      run.time += delay;
+      answer(run, "Same" + (i % 17), "SpidiBoost", i % 4 == 0 ? "yes" : "no");
+      assertEquals(i + 1, run.requested.size());
+      run.counter.tick();
+      if (i < 99999 && delay < 100) {
+        assertEquals(i + 1, run.requested.size());
+        run.time = expectedSent + 99;
+        run.counter.tick();
+        assertEquals(i + 1, run.requested.size());
+        run.time++;
+        run.counter.tick();
+      }
+      expectedSent += Math.max(100, delay);
+    }
+    assertNotNull(run.result);
+    assertTrue(run.result.complete());
+    assertEquals("75000", run.result.points());
+    assertEquals(75000, run.result.counted());
+    assertEquals(100000, run.counter.checked());
+    assertEquals(100000, run.requested.size());
   }
 
   @Test

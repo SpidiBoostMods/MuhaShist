@@ -21,6 +21,7 @@ import net.spidiboost.muhashist.updates.*;
 public final class NativeProbe implements ClientModInitializer {
   public static final List<String> sent = new ArrayList<>();
   public static final ArrayDeque<String> pendingChecks = new ArrayDeque<>();
+  public static final List<Long> checkTimes = new ArrayList<>();
   public static boolean routeMessages;
   public static long primaryMessages, staffMessages;
   private static volatile Throwable packetFailure;
@@ -269,11 +270,13 @@ public final class NativeProbe implements ClientModInitializer {
           advanced
               .append("-- [2026-10-02 12:00] --\n")
               .append(name)
-              .append(" был забанен куратором SpidiBoost\nПо причине: Читы [Активный]\n");
+              .append(" был забанен куратором SpidiBoost\nПо причине: ")
+              .append(name.equals("Keep") ? "Уклон от проверки" : "Читы")
+              .append(" [Активный]\n");
         advanced.append(
             "-- [2026-10-02 12:01] --\n"
                 + "Expired был забанен куратором SpidiBoost\n"
-                + "По причине: Хранение читов [Истёк]\n");
+                + "По причине: Уклон от проверки [Истёк]\n");
         for (String time : List.of("12:00", "12:05", "12:11"))
           advanced
               .append("-- [2026-10-02 ")
@@ -291,7 +294,7 @@ public final class NativeProbe implements ClientModInitializer {
               client.runDirectory, "muhashist-checks.png", client.getFramebuffer(), text -> {});
         }
         if (mod.counter().active()) return;
-        require(mod.counter().points().equals("3,1"), "active/silent/owner/autofish native total");
+        require(mod.counter().points().equals("3,4"), "active/silent/owner/autofish native total");
         require(
             sent.stream()
                 .filter(s -> s.startsWith("checkban "))
@@ -299,10 +302,20 @@ public final class NativeProbe implements ClientModInitializer {
                 .equals(List.of("checkban Keep", "checkban Silent", "checkban Wrong")),
             "active-only sequential commands or unexpected check for expired/autofish");
         Path reportFile = FabricLoader.getInstance().getConfigDir().resolve("ms.txt");
-        if (!Files.readString(reportFile).contains("Баллы: 3,1")) return;
+        if (!Files.readString(reportFile).contains("Баллы: 3,4")) return;
+        require(checkTimes.size() == 3, "missing checkban send timestamps");
+        long fastest = Long.MAX_VALUE;
+        for (int i = 1; i < checkTimes.size(); i++)
+          fastest = Math.min(fastest, checkTimes.get(i) - checkTimes.get(i - 1));
+        require(fastest >= 99, "checkban commands sent in a burst");
+        pass(
+            "native sequential checkban spacing: minimum "
+                + fastest
+                + " ms, no overlapping requests");
         pass(
             "actual active-only checkban commands, foreign curator/silent filtering, inactive score"
-                + " and ten-minute autofish grouping");
+                + " and ten-minute autofish grouping; evasion counts one point for active and"
+                + " expired bans");
         routeMessages = false;
         prepareUpdate(client);
         phase = 99;

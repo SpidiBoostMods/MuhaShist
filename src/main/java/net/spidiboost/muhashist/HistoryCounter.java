@@ -398,7 +398,7 @@ public final class HistoryCounter {
     long now = clock.getAsLong();
     if (historyDone) {
       if (checking == null) {
-        if (now >= nextCheckAt) nextCheck();
+        if (checks.isEmpty() || now >= nextCheckAt) nextCheck();
       } else if (now - checkStarted >= 6000)
         retryCheck("Неполный ответ /checkban " + checking.name + ".");
       return;
@@ -452,8 +452,7 @@ public final class HistoryCounter {
     target = checking.name;
     reply = new CheckReply(checking.name, curator);
     retries = 0;
-    checkStarted = clock.getAsLong();
-    listener.check(checking.name);
+    sendCheck();
   }
 
   private void retryCheck(String problem) {
@@ -462,7 +461,12 @@ public final class HistoryCounter {
       return;
     }
     reply = new CheckReply(checking.name, curator);
+    sendCheck();
+  }
+
+  private void sendCheck() {
     checkStarted = clock.getAsLong();
+    nextCheckAt = checkStarted + 100;
     listener.check(checking.name);
   }
 
@@ -482,7 +486,6 @@ public final class HistoryCounter {
         checked++;
         checking = null;
         reply = null;
-        nextCheckAt = clock.getAsLong() + 100;
         if (clear && checked % clearEvery == 0) listener.clearChat();
       }
     }

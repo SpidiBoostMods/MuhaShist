@@ -20,7 +20,10 @@ class ConfigRulesTest {
             + " для чистки следов ПО; Хранение батников для чистки следов";
     String old =
         "# GUI\nhudX=12\nhudY=34\nclear=false\nclearEvery=7\n# Причины\n"
-            + ScoreRules.defaults().getFirst().replace(" - 1.0", "; " + extras + " - 1.0")
+            + ScoreRules.defaults()
+                .getFirst()
+                .replace(" Уклон от проверки;", "")
+                .replace(" - 1.0", "; " + extras + " - 1.0")
             + "\n"
             + ScoreRules.defaults().get(1)
             + "\n# мой комментарий\n";
@@ -30,13 +33,53 @@ class ConfigRulesTest {
     assertEquals(34, migrated.y());
     assertFalse(migrated.clear());
     assertEquals(7, migrated.every());
-    assertEquals(BigDecimal.ZERO, migrated.rules().score("Уклон от проверки"));
+    assertEquals(BigDecimal.ONE, migrated.rules().score("Уклон от проверки"));
     assertTrue(Files.readString(migrated.file()).contains("# мой комментарий"));
     String custom = old.replace(" - 1.0", " - 2.0");
     Files.writeString(directory.resolve("ms.cfg"), custom);
     var kept = new MsConfig(directory);
     assertEquals(new BigDecimal("2"), kept.rules().score("Уклон от проверки"));
     assertEquals(custom, Files.readString(kept.file()));
+  }
+
+  @Test
+  void lastReleaseDefaultsGainEvasionWithoutResettingSettingsAndMigrateOnlyOnce() throws Exception {
+    String old =
+        "# Положение GUI\nhudX=98\nhudY=76\nclear=false\nclearEvery=13\n"
+            + "autofishWindowMinutes=7\n# Причины\n"
+            + ScoreRules.defaults().getFirst().replace(" Уклон от проверки;", "")
+            + "\n"
+            + ScoreRules.defaults().get(1)
+            + "\n# сохранить\n";
+    Path file = directory.resolve("ms.cfg");
+    Files.writeString(file, old);
+    var config = new MsConfig(directory);
+    assertEquals(BigDecimal.ONE, config.rules().score("Уклон от проверки"));
+    assertEquals(98, config.x());
+    assertEquals(76, config.y());
+    assertFalse(config.clear());
+    assertEquals(13, config.every());
+    assertEquals(420000, config.fishMillis());
+    String saved = Files.readString(file);
+    assertTrue(saved.contains("# сохранить"));
+    assertTrue(saved.contains("Уклон от проверки"));
+    assertFalse(config.rules().previousDefaults());
+    new MsConfig(directory);
+    assertEquals(saved, Files.readString(file));
+  }
+
+  @Test
+  void customizedWeightsDisabledEvasionAndRemovedAliasesAreNeverOverwritten() throws Exception {
+    for (String rows : List.of("Уклон от проверки - 0", "Уклон от проверки - 2,25", "Читы - 3")) {
+      String custom = "# Причины — мои\n" + rows + "\n# оставить как есть\n";
+      Path file = directory.resolve("ms.cfg");
+      Files.writeString(file, custom);
+      var config = new MsConfig(directory);
+      assertEquals(
+          ScoreRules.parse(List.of(rows)).score("Уклон от проверки"),
+          config.rules().score("Уклон от проверки"));
+      assertEquals(custom, Files.readString(file));
+    }
   }
 
   @Test
