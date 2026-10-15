@@ -23,6 +23,8 @@ public final class NativeProbe implements ClientModInitializer {
   public static final ArrayDeque<String> pendingChecks = new ArrayDeque<>();
   public static boolean routeMessages;
   public static long primaryMessages, staffMessages;
+  private static volatile Throwable packetFailure;
+  private boolean checkShot;
   private int phase, frames, produced;
   private long started = System.nanoTime(), stopped;
   private Path report;
@@ -44,8 +46,11 @@ public final class NativeProbe implements ClientModInitializer {
   }
 
   private static void receive(MinecraftClient client, String value) {
-    net.spidiboost.muhashist.qa.mixin.PacketAccess.muhaqa$dispatch(
-        new GameMessageS2CPacket(Text.literal(value), false), client.getNetworkHandler());
+    try {
+      net.spidiboost.muhashist.qa.mixin.PacketAccess.muhaqa$dispatch(
+          new GameMessageS2CPacket(Text.literal(value), false), client.getNetworkHandler());
+    } catch (net.minecraft.network.OffThreadException ignored) {
+    }
   }
 
   private static String ban(int i) {
@@ -76,6 +81,8 @@ public final class NativeProbe implements ClientModInitializer {
         throw new AssertionError("Native fixture exceeded eight minutes");
       if (client.player == null || client.player.age < 40 || client.getOverlay() != null) return;
       var mod = MuhaClient.INSTANCE;
+      if (packetFailure != null)
+        throw new AssertionError("Network-thread fixture failed", packetFailure);
       if (!pendingChecks.isEmpty()) {
         String name = pendingChecks.removeFirst();
         receive(
@@ -141,8 +148,16 @@ public final class NativeProbe implements ClientModInitializer {
         require(
             sent.equals(List.of("shist SpidiBoost ban 100000")),
             "local alias leaked or count clamped");
-        receive(client, "История персонала SpidiBoost (Лимит: 100000):");
-        receive(client, ban(0) + ban(1) + ban(2) + ban(3) + ban(4) + ban(5) + ban(6));
+        var wire =
+            new Thread(
+                () -> {
+                  receive(client, "История персонала SpidiBoost (Лимит: 100000):");
+                  receive(client, ban(0) + ban(1) + ban(2) + ban(3) + ban(4) + ban(5) + ban(6));
+                },
+                "MuhaQA-wire");
+        wire.setDaemon(true);
+        wire.setUncaughtExceptionHandler((thread, error) -> packetFailure = error);
+        wire.start();
         produced = 7;
         phase = 1;
         pass(
@@ -233,7 +248,7 @@ public final class NativeProbe implements ClientModInitializer {
         require(primaryMessages > 0 && staffMessages > 0, "both routed panels not exercised");
         pass(
             "raw packet capture precedes two chat-panel routes, including cancelled vanilla game"
-                + " messages");
+                + " messages and network-thread rescheduling without duplicates");
         client.getNetworkHandler().sendChatCommand("muhashist SpidiBoost 100 01.10.2026");
         receive(client, "История персонала SpidiBoost (Лимит: 100):");
         receive(client, ban(0));
@@ -270,6 +285,11 @@ public final class NativeProbe implements ClientModInitializer {
         receive(client, advanced.toString());
         phase = 5;
       } else if (phase == 5) {
+        if (!checkShot && mod.counter().checking() && mod.counter().checked() == 1) {
+          checkShot = true;
+          ScreenshotRecorder.saveScreenshot(
+              client.runDirectory, "muhashist-checks.png", client.getFramebuffer(), text -> {});
+        }
         if (mod.counter().active()) return;
         require(mod.counter().points().equals("3,1"), "active/silent/owner/autofish native total");
         require(

@@ -24,7 +24,8 @@ public final class ProbeNetwork {
 
   @Inject(method = "onGameMessage", at = @At("HEAD"), cancellable = true)
   private void muhaqa$route(GameMessageS2CPacket packet, CallbackInfo ci) {
-    if (NativeProbe.routeMessages) {
+    if (NativeProbe.routeMessages
+        && net.minecraft.client.MinecraftClient.getInstance().isOnThread()) {
       if ((NativeProbe.primaryMessages + NativeProbe.staffMessages) % 2 == 0)
         NativeProbe.primaryMessages++;
       else NativeProbe.staffMessages++;
