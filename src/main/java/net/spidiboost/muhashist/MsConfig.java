@@ -11,7 +11,7 @@ public final class MsConfig {
       Pattern.compile("^([A-Za-z][A-Za-z0-9_.-]*)\\s*=\\s*(.*)$");
   private final Path file;
   private boolean clear = true;
-  private long every = 20, fishMinutes = 10;
+  private long every = 20, fishMinutes = 10, checkDelay = 100;
   private int x = -1, y = -1;
   private ScoreRules rules = ScoreRules.standard();
 
@@ -52,19 +52,23 @@ public final class MsConfig {
     try {
       every = Long.parseLong(settings.getOrDefault("clearEvery", "20"));
       fishMinutes = Long.parseLong(settings.getOrDefault("autofishWindowMinutes", "10"));
+      checkDelay = Long.parseLong(settings.getOrDefault("checkbanDelay", "100"));
       Math.multiplyExact(fishMinutes, 60000);
       x = Integer.parseInt(settings.getOrDefault("hudX", "-1"));
       y = Integer.parseInt(settings.getOrDefault("hudY", "-1"));
     } catch (NumberFormatException | ArithmeticException e) {
-      throw new IOException("ms.cfg: неверное число в настройках GUI, очистки или autofish.");
+      throw new IOException(
+          "ms.cfg: неверное число в настройках GUI, очистки, checkban или autofish.");
     }
+    if (checkDelay < 0) throw new IOException("ms.cfg: checkbanDelay не меньше 0 мс.");
     if (every < 1 || fishMinutes < 1 || x < -1 || y < -1)
       throw new IOException("ms.cfg: интервалы > 0; координаты не меньше -1.");
     if (reasons.isEmpty() && !section) {
       var unknown = new StringBuilder();
       settings.forEach(
           (key, item) -> {
-            if (!Set.of("clear", "clearEvery", "hudX", "hudY", "autofishWindowMinutes")
+            if (!Set.of(
+                    "clear", "clearEvery", "hudX", "hudY", "autofishWindowMinutes", "checkbanDelay")
                 .contains(key)) unknown.append(key).append('=').append(item).append('\n');
           });
       atomic(file, defaults() + unknown);
@@ -110,6 +114,10 @@ public final class MsConfig {
         + "\nclearEvery="
         + every
         + "\n\n"
+        + "# Задержка между отправками /checkban, мс. 0 — без искусственной задержки.\n"
+        + "checkbanDelay="
+        + checkDelay
+        + "\n\n"
         + "# Autofish: один засчитанный бан за окно; следующий — строго позже окна.\n"
         + "autofishWindowMinutes="
         + fishMinutes
@@ -133,6 +141,10 @@ public final class MsConfig {
 
   public long every() {
     return every;
+  }
+
+  public long delay() {
+    return checkDelay;
   }
 
   public int x() {
@@ -191,6 +203,12 @@ public final class MsConfig {
     every = count;
   }
 
+  public void delay(long millis) throws IOException {
+    if (millis < 0) throw new IOException("Задержка /checkban не меньше 0 мс.");
+    update(Map.of("checkbanDelay", Long.toString(millis)));
+    checkDelay = millis;
+  }
+
   public void save() throws IOException {
     update(
         Map.of(
@@ -202,6 +220,8 @@ public final class MsConfig {
             Boolean.toString(clear),
             "clearEvery",
             Long.toString(every),
+            "checkbanDelay",
+            Long.toString(checkDelay),
             "autofishWindowMinutes",
             Long.toString(fishMinutes)));
   }

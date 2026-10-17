@@ -79,7 +79,7 @@ public final class HistoryCounter {
   private Ban checking;
   private CheckReply reply;
   private boolean historyDone;
-  private long checkStarted, nextCheckAt, checked, retries;
+  private long checkStarted, lastCheck, checked, retries, checkDelay = 100;
   private LocalDateTime date;
   private Ban current;
   private StringBuilder reason;
@@ -97,6 +97,15 @@ public final class HistoryCounter {
     if (every <= 0) throw new IllegalArgumentException("Интервал очистки должен быть больше нуля.");
     clear = enabled;
     clearEvery = every;
+  }
+
+  public void delay(long millis) {
+    if (millis < 0) throw new IllegalArgumentException("Задержка /checkban не меньше 0 мс.");
+    checkDelay = millis;
+  }
+
+  public long delay() {
+    return checkDelay;
   }
 
   public boolean active() {
@@ -175,7 +184,7 @@ public final class HistoryCounter {
     checking = null;
     reply = null;
     historyDone = false;
-    nextCheckAt = 0;
+    lastCheck = 0;
     header = readingReason = false;
     started = lastOwned = clock.getAsLong();
     active = true;
@@ -398,8 +407,8 @@ public final class HistoryCounter {
     long now = clock.getAsLong();
     if (historyDone) {
       if (checking == null) {
-        if (checks.isEmpty() || now >= nextCheckAt) nextCheck();
-      } else if (now - checkStarted >= 6000)
+        if (checks.isEmpty() || now - lastCheck >= checkDelay) nextCheck();
+      } else if (now - checkStarted >= 6000 && now - lastCheck >= checkDelay)
         retryCheck("Неполный ответ /checkban " + checking.name + ".");
       return;
     }
@@ -466,7 +475,7 @@ public final class HistoryCounter {
 
   private void sendCheck() {
     checkStarted = clock.getAsLong();
-    nextCheckAt = checkStarted + 100;
+    lastCheck = checkStarted;
     listener.check(checking.name);
   }
 

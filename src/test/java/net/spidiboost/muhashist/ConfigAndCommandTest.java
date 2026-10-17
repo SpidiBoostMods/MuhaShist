@@ -18,7 +18,7 @@ class ConfigAndCommandTest {
     assertEquals(
         new BigInteger("9".repeat(100)),
         MsCommand.parse("SpidiBoost " + "9".repeat(100) + " 1 10 26").limit());
-    for (String nick : new String[] {"open", "update", "clear", "stop", "config"})
+    for (String nick : new String[] {"open", "update", "clear", "stop", "config", "delay"})
       assertEquals(MsCommand.Action.START, MsCommand.parse(nick + " 100 1.10.26").action());
     assertEquals(MsCommand.Action.UPDATE, MsCommand.parse("update off").action());
     assertEquals("21", MsCommand.parse("clear 21").value());

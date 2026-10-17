@@ -25,7 +25,7 @@ public final class NativeProbe implements ClientModInitializer {
   public static boolean routeMessages;
   public static long primaryMessages, staffMessages;
   private static volatile Throwable packetFailure;
-  private boolean checkShot;
+  private boolean checkShot, delayChanged;
   private int phase, frames, produced;
   private long started = System.nanoTime(), stopped;
   private Path report;
@@ -108,7 +108,7 @@ public final class NativeProbe implements ClientModInitializer {
                   .getReader()
                   .canRead(),
               "greedy date parse");
-          for (String nick : List.of("open", "update", "clear", "stop", "config"))
+          for (String nick : List.of("open", "update", "clear", "stop", "config", "delay"))
             require(
                 !dispatcher.parse(alias + " " + nick + " 100 1.10.26", null).getReader().canRead(),
                 "reserved nickname parse");
@@ -120,8 +120,37 @@ public final class NativeProbe implements ClientModInitializer {
                   .stream()
                   .map(s -> s.getText())
                   .toList();
-          require(suggestions.containsAll(List.of("open", "stop", "clear", "update")), "root TAB");
+          require(
+              suggestions.containsAll(List.of("open", "stop", "clear", "update", "delay")),
+              "root TAB");
+          var delaySuggestions =
+              dispatcher
+                  .getCompletionSuggestions(dispatcher.parse(alias + " delay ", null))
+                  .get()
+                  .getList()
+                  .stream()
+                  .map(s -> s.getText())
+                  .toList();
+          require(delaySuggestions.containsAll(List.of("0", "100", "250", "1000")), "delay TAB");
         }
+        require(
+            mod.config().delay() == 100 && mod.counter().delay() == 100, "default delay changed");
+        client.getNetworkHandler().sendChatCommand("MS delay 250");
+        require(mod.counter().delay() == 250, "delay command did not reach the queue");
+        require(
+            new MsConfig(FabricLoader.getInstance().getConfigDir()).delay() == 250,
+            "delay did not persist");
+        mod.execute("delay -1");
+        require(
+            mod.config().delay() == 250 && mod.counter().delay() == 250,
+            "bad delay changed settings");
+        mod.execute("delay");
+        mod.execute("delay 0");
+        require(mod.counter().delay() == 0, "zero delay rejected");
+        mod.execute("delay 100");
+        pass(
+            "actual delay command, aliases, TAB, 100 ms default, zero, persistence and invalid"
+                + " input");
         mod.execute("clear off");
         mod.execute("clear 7");
         var cfg = new MsConfig(FabricLoader.getInstance().getConfigDir());
@@ -130,8 +159,12 @@ public final class NativeProbe implements ClientModInitializer {
         mod.execute("clear 20");
         Path configFile = cfg.file();
         String initialConfig = Files.readString(configFile);
-        Files.writeString(configFile, initialConfig + "\nПроверка, запятая - 0,125\n");
+        Files.writeString(
+            configFile,
+            initialConfig.replace("checkbanDelay=100", "checkbanDelay=350")
+                + "\nПроверка, запятая - 0,125\n");
         mod.execute("config reload");
+        require(mod.counter().delay() == 350, "config reload did not apply delay");
         require(
             mod.config().rules().score("Проверка, запятая").toPlainString().equals("0.125"),
             "config reload did not load decimal rule");
@@ -141,6 +174,7 @@ public final class NativeProbe implements ClientModInitializer {
         require(mod.config() == goodConfig, "bad reload replaced working config");
         Files.writeString(configFile, initialConfig);
         mod.execute("config load");
+        require(mod.counter().delay() == 100, "config load did not restore delay");
         pass(
             "config reload/load, decimal comma and reason comma; invalid reload keeps previous"
                 + " settings");
@@ -288,6 +322,11 @@ public final class NativeProbe implements ClientModInitializer {
         receive(client, advanced.toString());
         phase = 5;
       } else if (phase == 5) {
+        if (!delayChanged && mod.counter().checking() && mod.counter().checked() == 0) {
+          delayChanged = true;
+          mod.execute("delay 250");
+          require(mod.counter().delay() == 250, "live delay command ignored");
+        }
         if (!checkShot && mod.counter().checking() && mod.counter().checked() == 1) {
           checkShot = true;
           ScreenshotRecorder.saveScreenshot(
@@ -307,9 +346,9 @@ public final class NativeProbe implements ClientModInitializer {
         long fastest = Long.MAX_VALUE;
         for (int i = 1; i < checkTimes.size(); i++)
           fastest = Math.min(fastest, checkTimes.get(i) - checkTimes.get(i - 1));
-        require(fastest >= 99, "checkban commands sent in a burst");
+        require(delayChanged && fastest >= 249, "live checkban delay was not respected");
         pass(
-            "native sequential checkban spacing: minimum "
+            "native live /ms delay 250, sequential checkban spacing: minimum "
                 + fastest
                 + " ms, no overlapping requests");
         pass(

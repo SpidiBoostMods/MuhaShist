@@ -13,6 +13,7 @@ public record MsCommand(
     OPEN,
     UPDATE,
     CONFIG,
+    DELAY,
     CLEAR
   }
 
@@ -29,9 +30,20 @@ public record MsCommand(
             case "update" -> Action.UPDATE;
             case "clear" -> Action.CLEAR;
             case "config" -> Action.CONFIG;
+            case "delay" -> Action.DELAY;
             default -> null;
           };
       if (action != null) return simple(action, "");
+    }
+    if (parts.length == 2 && first.equals("delay")) {
+      if (!parts[1].matches("[0-9]+"))
+        throw new IllegalArgumentException("Задержка: /ms delay мс, целое число не меньше 0.");
+      try {
+        return simple(Action.DELAY, Long.toString(Long.parseLong(parts[1])));
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException(
+            "Задержка слишком большая. Максимум " + Long.MAX_VALUE + " мс.");
+      }
     }
     if (parts.length == 2 && first.equals("config")) {
       String value = parts[1].toLowerCase(Locale.ROOT);

@@ -73,7 +73,10 @@ public final class MuhaClient implements ClientModInitializer {
               }
             },
             () -> System.nanoTime() / 1_000_000);
-    if (config != null) scan.clearing(config.clear(), config.every());
+    if (config != null) {
+      scan.clearing(config.clear(), config.every());
+      scan.delay(config.delay());
+    }
     ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> register(dispatcher));
     ClientTickEvents.END_CLIENT_TICK.register(c -> tick());
     ClientPlayConnectionEvents.DISCONNECT.register(
@@ -120,7 +123,7 @@ public final class MuhaClient implements ClientModInitializer {
                             String part = text.substring(last + 1).toLowerCase(Locale.ROOT);
                             if (last < 0) {
                               for (String value :
-                                  List.of("open", "stop", "clear", "update", "config"))
+                                  List.of("open", "stop", "clear", "update", "config", "delay"))
                                 if (value.startsWith(part)) offset.suggest(value);
                               var network = MinecraftClient.getInstance().getNetworkHandler();
                               if (network != null)
@@ -134,6 +137,9 @@ public final class MuhaClient implements ClientModInitializer {
                                         });
                             } else if (text.matches("(?i)config\\s+\\S*")) {
                               for (String value : List.of("dir", "reload", "load"))
+                                if (value.startsWith(part)) offset.suggest(value);
+                            } else if (text.matches("(?i)delay\\s+\\S*")) {
+                              for (String value : List.of("0", "50", "100", "250", "500", "1000"))
                                 if (value.startsWith(part)) offset.suggest(value);
                             } else if (text.matches("(?i)(?:update|clear)\\s+\\S*")) {
                               for (String value : List.of("on", "off"))
@@ -183,6 +189,7 @@ public final class MuhaClient implements ClientModInitializer {
                   }
                 });
         case CLEAR -> clear(command.value());
+        case DELAY -> delay(command.value());
         case UPDATE -> update(command.value());
         case CONFIG -> configure(command.value());
       }
@@ -203,6 +210,7 @@ public final class MuhaClient implements ClientModInitializer {
       throw new IllegalArgumentException(
           "Число слишком длинное для сетевой команды Minecraft (256 символов).");
     scan.scoring(config.rules(), config.fishMillis());
+    scan.delay(config.delay());
     scan.start(command.nickname(), command.limit(), command.since());
     LOG.info(
         "History started: curator={}, limit={}, since={}",
@@ -222,6 +230,13 @@ public final class MuhaClient implements ClientModInitializer {
     scan.clearing(config.clear(), config.every());
     message(
         "Очистка " + (config.clear() ? "вкл" : "выкл") + " · каждые " + config.every() + " банов.");
+  }
+
+  private void delay(String value) throws Exception {
+    if (config == null) throw new IllegalStateException(configError);
+    if (!value.isEmpty()) config.delay(Long.parseLong(value));
+    scan.delay(config.delay());
+    message("Задержка /checkban: " + config.delay() + " мс.");
   }
 
   private void configure(String value) throws Exception {
@@ -247,6 +262,7 @@ public final class MuhaClient implements ClientModInitializer {
     hud = new MsHud(config);
     configError = "";
     scan.clearing(config.clear(), config.every());
+    scan.delay(config.delay());
     message(
         scan.active() ? "Конфиг загружен. Причины — со следующей проверки." : "Конфиг загружен.");
   }
@@ -268,6 +284,7 @@ public final class MuhaClient implements ClientModInitializer {
     message("/ms ник количество дата — подсчёт");
     message("/ms open · /ms stop");
     message("/ms clear on|off|число");
+    message("/ms delay мс");
     message("/ms update [on|off]");
     message("/ms config dir|reload|load");
   }
