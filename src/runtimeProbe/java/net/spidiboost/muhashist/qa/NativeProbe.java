@@ -379,8 +379,8 @@ public final class NativeProbe implements ClientModInitializer {
         dir = game.resolve(".spidiboost-updates");
     Files.createDirectories(dir);
     Files.createDirectories(game.resolve("mods"));
-    Path old = game.resolve("mods/muhashist-1.21.4-v0.0.0.jar"),
-        next = game.resolve("mods/muhashist-1.21.4-v0.0.1.jar"),
+    Path old = game.resolve("mods/6ubaaFP-1.21.4-0.0.0.jar"),
+        next = game.resolve("mods/6ubaaFP-1.21.4-0.0.1.jar"),
         stage = dir.resolve("stage.jar"),
         marker = root.resolve("restart-result.txt");
     Files.deleteIfExists(next);
@@ -452,6 +452,11 @@ public final class NativeProbe implements ClientModInitializer {
     require(
         ModsDownload.owns(change) && BatchInstall.hash(old).equals(hash) && helper.isAlive(),
         "off changed live JAR or lost helper");
+    var chatField=client.inGameHud.getChatHud().getClass().getDeclaredField("messages");
+    chatField.setAccessible(true);
+    String notice=((List<?>)chatField.get(client.inGameHud.getChatHud())).getFirst().toString();
+    require(notice.contains("6ubaaFP")&&!notice.contains("MuhaShist"),"update announcement attributed to the wrong mod: "+notice);
+    pass("native MuhaShist coordinator announces only the updated 6ubaaFP; current MuhaShist is not claimed as updated");
     pass(
         "native update off publishes only verified QA JAR, preserves old open process files, starts"
             + " detached READY helper");

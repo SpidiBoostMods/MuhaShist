@@ -187,7 +187,7 @@ public final class SharedUpdater {
 
   public static Text supportMessage(String reason) {
     return Text.empty()
-        .append(UpdateScreen.gradient("MuhaShist · обновление"))
+        .append(UpdateScreen.gradient("SpidiBoost · обновление"))
         .append(
             Text.literal("\n" + reason + " Игра продолжит работать.\n")
                 .styled(s -> s.withColor(0xffd8ad)))
@@ -214,7 +214,7 @@ public final class SharedUpdater {
               support
                   ? supportMessage(reason)
                   : Text.empty()
-                      .append(UpdateScreen.gradient("MuhaShist · "))
+                      .append(UpdateScreen.gradient("SpidiBoost · "))
                       .append(Text.literal(reason).styled(s -> s.withColor(0xffd8ad)));
           client.inGameHud.getChatHud().addMessage(text);
         });
@@ -245,8 +245,7 @@ public final class SharedUpdater {
                   "Новая версия в mods; старая удалится после выхода. Без перезапуска.");
             }
         notice(
-            "Обновление скачано в mods. Помощник удалит старый JAR после выхода; автоперезапуск"
-                + " выключен.",
+            UpdateNotice.downloaded(pendingPlan.changes().stream().map(c->c.destination()).toList()),
             false);
       } catch (IOException e) {
         LOG.warn("Could not publish prepared update to mods ({})", e.getClass().getSimpleName());
