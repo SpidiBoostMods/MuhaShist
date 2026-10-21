@@ -25,7 +25,7 @@ class MuhaExitTest {
                   + "\"environment\":\"client\",\"depends\":{\"minecraft\":\"1.21.4\"}}")
               .getBytes(StandardCharsets.UTF_8));
       zip.closeEntry();
-      zip.putNextEntry(new ZipEntry("muhashist-shared-update-agent.jar"));
+      zip.putNextEntry(new ZipEntry("muhashist-update-agent.jar"));
       zip.write(new byte[] {1, 2, 3});
       zip.closeEntry();
     }
@@ -42,7 +42,7 @@ class MuhaExitTest {
     Files.writeString(game.resolve("mods/OtherMod.jar"), "untouched");
     Files.createDirectories(game.resolve("config"));
     Files.writeString(game.resolve("config/ms.cfg"), "personal configuration");
-    RestartPolicy.set(game, true);
+
     String oldHash = BatchInstall.hash(old), newHash = BatchInstall.hash(newFile);
     String java =
         Path.of(
@@ -97,11 +97,11 @@ class MuhaExitTest {
       assertEquals(newHash, BatchInstall.hash(next));
       assertEquals(
           oldHash,
-          BatchInstall.hash(game.resolve(".spidiboost-updates/backups/" + oldHash + ".jar.bak")));
+          BatchInstall.hash(game.resolve(".muhashist-updates/backups/" + oldHash + ".jar.bak")));
       assertEquals("untouched", Files.readString(game.resolve("mods/OtherMod.jar")));
       assertEquals("personal configuration", Files.readString(game.resolve("config/ms.cfg")));
       long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-      Path log = game.resolve(".spidiboost-updates/update.log");
+      Path log = game.resolve(".muhashist-updates/update.log");
       while (!Files.exists(log) && System.nanoTime() < until) Thread.sleep(25);
       assertFalse(Files.readString(log).contains("launcher restart"));
     } finally {
@@ -111,26 +111,16 @@ class MuhaExitTest {
   }
 
   @Test
-  void muhaOnlyPlansCannotRequestALauncherAndUseAnIndependentLock() {
+  void multipleUpdatesCannotBeSentToTheHelper() {
     var change =
         new BatchPlan.Change(
             root.resolve("old.jar"),
-            root.resolve("muhashist-1.21.4-v1.2.0.jar"),
+            root.resolve("new.jar"),
             root.resolve("stage.jar"),
             "a".repeat(64),
             "b".repeat(64));
-    var plan = new BatchPlan(1, root, List.of(change), List.of(), root, List.of("launcher"), false);
-    assertTrue(BatchAgent.muhaOnly(plan));
-    var family =
-        new BatchPlan.Change(
-            root.resolve("old.jar"),
-            root.resolve("SpidiCard-1.21.4-1.2.0.jar"),
-            root.resolve("stage.jar"),
-            "a".repeat(64),
-            "b".repeat(64));
-    assertFalse(
-        BatchAgent.muhaOnly(
-            new BatchPlan(1, root, List.of(change, family), List.of(), root, List.of(), false)));
+    assertThrows(
+        IllegalArgumentException.class, () -> new BatchPlan(1, root, List.of(change, change)));
   }
 
   public static final class ClientFixture {

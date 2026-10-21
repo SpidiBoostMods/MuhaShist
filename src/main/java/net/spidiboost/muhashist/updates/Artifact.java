@@ -26,7 +26,7 @@ public final class Artifact {
           || !m.get("name").getAsString().equals("spidiboost." + r.mod().name())
           || m.getAsJsonArray("authors").size() != 1
           || !m.getAsJsonArray("authors").get(0).getAsString().equals("SpidiBoost")
-          || z.getEntry(r.mod().id() + "-shared-update-agent.jar") == null)
+          || z.getEntry("muhashist-update-agent.jar") == null)
         throw new IOException("Unexpected release identity");
     } catch (RuntimeException e) {
       throw new IOException("Invalid release metadata", e);

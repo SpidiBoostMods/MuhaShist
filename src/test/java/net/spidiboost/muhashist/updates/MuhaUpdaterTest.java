@@ -30,8 +30,10 @@ class MuhaUpdaterTest {
 
   @Test
   void offOnlyChecksMuhaAndNeverChangesFamilyPreferences() throws Exception {
-    RestartPolicy.set(game, true);
-    String family = Files.readString(RestartPolicy.file(game));
+    Files.createDirectories(game.resolve("config"));
+    Path foreign = game.resolve("config/other-updater.properties");
+    Files.writeString(foreign, "untouched");
+    String family = Files.readString(foreign);
     AutoDownload.set(game, false);
     var calls = new AtomicInteger();
     try (var updater =
@@ -50,7 +52,7 @@ class MuhaUpdaterTest {
       assertTrue(state.outdated());
       assertEquals("https://github.com/SpidiBoostMods/MuhaShist/releases/latest", state.link());
       assertEquals(1, calls.get());
-      assertEquals(family, Files.readString(RestartPolicy.file(game)));
+      assertEquals(family, Files.readString(foreign));
       assertFalse(Files.exists(game.resolve("mods")));
     }
   }
@@ -267,7 +269,9 @@ class MuhaUpdaterTest {
 
   @Test
   void settingsAreProductSpecificAndSurviveReload() throws Exception {
-    RestartPolicy.set(game, false);
+    Files.createDirectories(game.resolve("config"));
+    Path foreign = game.resolve("config/other-updater.properties");
+    Files.writeString(foreign, "untouched");
     try (var updater =
         new MuhaUpdater(game, "1.1.3", true, (uri, limit) -> null, (release, bytes) -> {})) {
       assertTrue(updater.automatic());
@@ -275,7 +279,7 @@ class MuhaUpdaterTest {
       assertFalse(AutoDownload.enabled(game));
       updater.automatic(true);
       assertTrue(AutoDownload.enabled(game));
-      assertFalse(RestartPolicy.enabled(game));
+      assertEquals("untouched", Files.readString(foreign));
     }
     try (var updater =
         new MuhaUpdater(game, "1.1.3", true, (uri, limit) -> null, (release, bytes) -> {})) {

@@ -41,7 +41,7 @@ public final class NativeProbe implements ClientModInitializer {
   }
 
   private static void field(Object owner, String name, Object value) throws Exception {
-    var f = SharedUpdater.class.getDeclaredField(name);
+    var f = owner.getClass().getDeclaredField(name);
     f.setAccessible(true);
     f.set(owner, value);
   }
@@ -384,115 +384,51 @@ public final class NativeProbe implements ClientModInitializer {
   }
 
   private void prepareUpdate(MinecraftClient client) throws Exception {
-    Path root = client.runDirectory.toPath().toAbsolutePath(),
-        game = root.resolve("updater-QA/Призма с пробелами/instances/Muha-QA/minecraft"),
-        dir = game.resolve(".spidiboost-updates");
-    Files.createDirectories(dir);
+    Path game =
+        client
+            .runDirectory
+            .toPath()
+            .toAbsolutePath()
+            .resolve("updater-QA/Призма с пробелами/instances/Muha-QA/minecraft");
     Files.createDirectories(game.resolve("mods"));
     net.spidiboost.muhashist.updates.NativeUpdateProbe.prepare(game);
-    pass(
-        "native MuhaShist off does not download; now publishes verified JAR with detached helper,"
-            + " keeps auto-download off and leaves Minecraft running");
-    Path old = game.resolve("mods/6ubaaFP-1.21.4-0.0.0.jar"),
-        next = game.resolve("mods/6ubaaFP-1.21.4-0.0.1.jar"),
-        stage = dir.resolve("stage.jar"),
-        marker = root.resolve("restart-result.txt");
-    Files.deleteIfExists(next);
-    Files.deleteIfExists(marker);
-    jar(old, "old");
-    jar(stage, "new");
-    var change =
-        new BatchPlan.Change(old, next, stage, BatchInstall.hash(old), BatchInstall.hash(stage));
-    Path agent = dir.resolve("agent.jar");
-    try (var input =
-        SharedUpdater.class.getResourceAsStream("/muhashist-shared-update-agent.jar")) {
-      Files.copy(input, agent, StandardCopyOption.REPLACE_EXISTING);
+    pass("independent MuhaShist off/now transaction, own helper, no launcher and no foreign mods");
+    var state =
+        new net.spidiboost.muhashist.updates.MuhaUpdater.Status("1.2.1", "1.2.2", "downloaded");
+    var board = new OpaqueWindow();
+    UpdateBoard.attach(board, () -> state);
+    require(
+        board.values().size() == 2 && board.values().get(1).a().equals("muhashist"),
+        "combined UI row missing");
+    UpdateBoard.attach(board, () -> state);
+    require(board.values().size() == 2, "combined UI duplicated MuhaShist");
+    client.setScreen(board);
+    pass("shared update screen keeps existing row and adds independent MuhaShist status once");
+    client.scheduleStop();
+  }
+
+  public record OpaqueRow(String a, String b, String c, String d) {}
+
+  public static final class OpaqueWindow extends net.minecraft.client.gui.screen.Screen {
+    private final java.util.function.Supplier<List<OpaqueRow>> entries =
+        () -> List.of(new OpaqueRow("other", "Other", "1.0.0", "Актуальная версия"));
+
+    public OpaqueWindow() {
+      super(Text.literal("SpidiBoost — обновления"));
     }
-    String java = Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-        classes =
-            Path.of(RestartMarker.class.getProtectionDomain().getCodeSource().getLocation().toURI())
-                .toString();
-    Path hook = root.resolve("save-hook.txt");
-    Files.deleteIfExists(hook);
-    Object save =
-        FabricLoader.getInstance().getObjectShare().get("spidiboost:update-save-muhashist");
-    SharedUpdater.preserve(
-        "muhashist",
-        () -> {
-          if (save instanceof Runnable task) task.run();
-          try {
-            Files.writeString(hook, "saved");
-          } catch (IOException e) {
-            throw new java.io.UncheckedIOException(e);
-          }
-        });
-    var command =
-        List.of(
-            java,
-            "-cp",
-            classes,
-            RestartMarker.class.getName(),
-            marker.toString(),
-            old.toString(),
-            next.toString(),
-            hook.toString());
-    var plan =
-        new BatchPlan(
-            ProcessHandle.current().pid(), game, List.of(change), List.of(), root, command, false);
-    helper =
-        new ProcessBuilder(java, "-jar", "agent.jar")
-            .directory(dir.toFile())
-            .redirectError(ProcessBuilder.Redirect.INHERIT)
-            .start();
-    try (var out = helper.getOutputStream()) {
-      plan.write(out);
+
+    public List<OpaqueRow> values() {
+      return entries.get();
     }
-    require(
-        "READY"
-            .equals(new BufferedReader(new InputStreamReader(helper.getInputStream())).readLine()),
-        "exit helper not ready");
-    var ctor = SharedUpdater.class.getDeclaredConstructor();
-    ctor.setAccessible(true);
-    Object updater = ctor.newInstance();
-    field(updater, "pending", true);
-    field(updater, "pendingHelper", helper);
-    field(updater, "pendingPlan", plan);
-    field(updater, "canRestart", true);
-    var method = SharedUpdater.class.getDeclaredMethod("readyBehavior", Path.class);
-    method.setAccessible(true);
-    RestartPolicy.set(game, false);
-    String hash = BatchInstall.hash(old);
-    method.invoke(updater, game);
-    require(
-        ModsDownload.owns(change) && BatchInstall.hash(old).equals(hash) && helper.isAlive(),
-        "off changed live JAR or lost helper");
-    var chatField = client.inGameHud.getChatHud().getClass().getDeclaredField("messages");
-    chatField.setAccessible(true);
-    String notice = ((List<?>) chatField.get(client.inGameHud.getChatHud())).getFirst().toString();
-    require(
-        notice.contains("6ubaaFP") && !notice.contains("MuhaShist"),
-        "update announcement attributed to the wrong mod: " + notice);
-    pass(
-        "native MuhaShist coordinator announces only the updated 6ubaaFP; current MuhaShist is not"
-            + " claimed as updated");
-    pass(
-        "native update off publishes only verified QA JAR, preserves old open process files, starts"
-            + " detached READY helper");
-    RestartPolicy.set(game, true);
-    RestartPolicy.set(root, true);
-    method.invoke(updater, game);
-    require(client.currentScreen instanceof UpdateScreen, "on did not open native countdown");
-    pass(
-        "native update on countdown and save hook; detached helper must install after this isolated"
-            + " Minecraft exits");
   }
 
   private void checkUpdateCommands(MinecraftClient client, MuhaClient mod) throws Exception {
     Path game = client.runDirectory.toPath();
-    boolean family = RestartPolicy.enabled(game);
+    Path other = game.resolve("config/other-updater.properties");
+    Files.writeString(other, "untouched");
     mod.execute("update off");
     require(!AutoDownload.enabled(game), "off did not persist");
-    require(RestartPolicy.enabled(game) == family, "Muha changed family restart preference");
+    require(Files.readString(other).equals("untouched"), "Muha changed another setting");
     mod.execute("update now");
     var updaterField = MuhaClient.class.getDeclaredField("updater");
     updaterField.setAccessible(true);
@@ -547,7 +483,7 @@ public final class NativeProbe implements ClientModInitializer {
     statusField.set(updater, new MuhaUpdater.Status(current, "", "development"));
     mod.execute("update on");
     require(AutoDownload.enabled(game), "on did not persist");
-    require(RestartPolicy.enabled(game) == family, "on changed family preference");
+    require(Files.readString(other).equals("untouched"), "on changed another setting");
     pass(
         "native update on/off/now, TAB aliases, persistent isolated setting, clickable GitHub link,"
             + " exact title and three-notification limit");

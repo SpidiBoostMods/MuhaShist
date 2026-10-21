@@ -102,7 +102,6 @@ public final class MuhaClient implements ClientModInitializer {
           if (hud != null && hudVisible() && !(client.currentScreen instanceof ChatScreen))
             hud.draw(context, scan);
         });
-    SharedUpdater.preserve("muhashist", () -> scan.stop(""));
     var loader = FabricLoader.getInstance();
     var installed = loader.getModContainer("muhashist").orElseThrow();
     Path ownJar = null;
@@ -129,7 +128,7 @@ public final class MuhaClient implements ClientModInitializer {
     ClientPlayConnectionEvents.JOIN.register(
         (handler, sender, c) -> updater.request(MuhaUpdater.Mode.ENTRY));
     ClientLifecycleEvents.CLIENT_STOPPING.register(c -> updater.close());
-    SharedUpdater.initialize();
+    UpdateBoard.initialize(updater);
   }
 
   public static void register(
@@ -309,13 +308,16 @@ public final class MuhaClient implements ClientModInitializer {
   }
 
   private void updateStatus(MuhaUpdater.Status state) {
-    String latest = state.latest().isEmpty() ? "не удалось проверить" : state.latest();
+    String latest =
+        state.latest().isEmpty()
+            ? "актуальную версию пока не удалось проверить"
+            : "актуальная " + state.latest();
     message(
         "Автообновление "
             + (updater.automatic() ? "вкл" : "выкл")
             + " · установлена "
             + state.installed()
-            + " · актуальная "
+            + " · "
             + latest);
     if (state.state().equals("downloaded")) {
       message("Версия " + state.latest() + " скачана. Применится после обычного выхода из игры.");
@@ -394,8 +396,7 @@ public final class MuhaClient implements ClientModInitializer {
       var state = updater.status();
       if (state.state().equals("downloaded") && !state.latest().equals(announcedDownload)) {
         announcedDownload = state.latest();
-        message(
-            "MuhaShist " + state.latest() + " скачан. Применится после обычного выхода из игры.");
+        message("Версия " + state.latest() + " скачана. Применится после обычного выхода из игры.");
       } else if (!Set.of("checking", "downloading", "unavailable").contains(state.state())
           && updater.remind(now())) {
         message("Доступен MuhaShist " + state.latest() + " · установлена " + state.installed());

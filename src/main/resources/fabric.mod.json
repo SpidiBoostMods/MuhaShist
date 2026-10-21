@@ -9,7 +9,6 @@
   "environment": "client",
   "icon": "assets/muhashist/icon.png",
   "entrypoints": {
-    "preLaunch": ["net.spidiboost.muhashist.updates.ReserveUpdates"],
     "client": ["net.spidiboost.muhashist.MuhaClient"]
   },
   "mixins": ["muhashist.mixins.json"],

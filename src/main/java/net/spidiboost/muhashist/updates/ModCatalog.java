@@ -5,16 +5,18 @@ import java.util.*;
 
 public record ModCatalog(String id, String name, String repository, String manifest) {
   public static final List<ModCatalog> ALL =
-      List.of(
-          new ModCatalog("spidicard", "SpidiCard", "SpidiCard", "spidicard-update.properties"),
-          new ModCatalog("spidiban", "SpidiBan", "SpidiBan", "spidiban-update.properties"),
-          new ModCatalog("sixubaafp", "6ubaaFP", "6ubaaFP", "sixubaafp-update.properties"),
-          new ModCatalog(
-              "spidiboostlittlepet", "LittlePet", "LittlePet", "littlepet-update.properties"),
-          new ModCatalog("muhashist", "MuhaShist", "MuhaShist", "muhashist-update.properties"));
+      List.of(new ModCatalog("muhashist", "MuhaShist", "MuhaShist", "muhashist-update.properties"));
 
   public String base() {
     return "https://github.com/SpidiBoostMods/" + repository;
+  }
+
+  public ModCatalog {
+    if (!id.equals("muhashist")
+        || !name.equals("MuhaShist")
+        || !repository.equals("MuhaShist")
+        || !manifest.equals("muhashist-update.properties"))
+      throw new IllegalArgumentException("MuhaShist updates only itself");
   }
 
   public URI latest() {
@@ -22,9 +24,7 @@ public record ModCatalog(String id, String name, String repository, String manif
   }
 
   public String artifact(String version) {
-    return id.equals("muhashist")
-        ? "muhashist-1.21.4-v" + version + ".jar"
-        : name + "-1.21.4-" + version + ".jar";
+    return "muhashist-1.21.4-v" + version + ".jar";
   }
 
   public static List<ModCatalog> installed(Set<String> ids) {

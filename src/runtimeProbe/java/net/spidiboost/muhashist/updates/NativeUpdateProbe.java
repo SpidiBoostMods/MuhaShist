@@ -12,8 +12,8 @@ public final class NativeUpdateProbe {
     Path next = game.resolve("mods/muhashist-1.21.4-v0.0.1.jar");
     Files.deleteIfExists(next);
     try (var output = new ZipOutputStream(Files.newOutputStream(old))) {
-      output.putNextEntry(new ZipEntry("old.txt"));
-      output.write("original".getBytes(StandardCharsets.UTF_8));
+      output.putNextEntry(new ZipEntry("fabric.mod.json"));
+      output.write("{\"id\":\"muhashist\"}".getBytes(StandardCharsets.UTF_8));
       output.closeEntry();
     }
     byte[] data;
@@ -25,7 +25,7 @@ public final class NativeUpdateProbe {
                + "\"authors\":[\"SpidiBoost\"],\"environment\":\"client\",\"depends\":{\"minecraft\":\"1.21.4\"}}")
               .getBytes(StandardCharsets.UTF_8));
       output.closeEntry();
-      output.putNextEntry(new ZipEntry("muhashist-shared-update-agent.jar"));
+      output.putNextEntry(new ZipEntry("muhashist-update-agent.jar"));
       output.write(new byte[] {1});
       output.closeEntry();
       output.finish();

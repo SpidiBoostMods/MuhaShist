@@ -30,7 +30,7 @@ final class ExitUpdate implements MuhaUpdater.Installer {
 
   public void install(Release release, byte[] bytes) throws Exception {
     if (jar == null) throw new IOException("Mod JAR is outside this instance");
-    Path dir = game.resolve(".spidiboost-updates");
+    Path dir = game.resolve(".muhashist-updates");
     Files.createDirectories(dir);
     if (Files.isSymbolicLink(dir) || !dir.toRealPath().getParent().equals(game.toRealPath()))
       throw new IOException("Foreign update directory");
@@ -47,15 +47,7 @@ final class ExitUpdate implements MuhaUpdater.Installer {
               staged,
               BatchInstall.hash(jar),
               release.sha256());
-      next =
-          new BatchPlan(
-              ProcessHandle.current().pid(),
-              game,
-              List.of(change),
-              List.of(),
-              game,
-              List.of(),
-              false);
+      next = new BatchPlan(ProcessHandle.current().pid(), game, List.of(change));
       BatchInstall.validate(next);
       if (helper != null) {
         helper.destroy();
@@ -73,7 +65,7 @@ final class ExitUpdate implements MuhaUpdater.Installer {
         plan = null;
       }
       Path agent = Files.createTempFile(dir, "muhashist-agent-", ".jar");
-      try (var input = ExitUpdate.class.getResourceAsStream("/muhashist-shared-update-agent.jar")) {
+      try (var input = ExitUpdate.class.getResourceAsStream("/muhashist-update-agent.jar")) {
         if (input == null) throw new IOException("Missing update helper");
         byte[] contents = input.readNBytes(1048577);
         if (contents.length > 1048576) throw new IOException("Update helper too large");

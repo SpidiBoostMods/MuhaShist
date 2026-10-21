@@ -37,7 +37,13 @@ public final class MuhaUpdater implements AutoCloseable {
   }
 
   private final Path game;
-  private final SharedUpdater.Fetcher http;
+
+  @FunctionalInterface
+  interface Fetcher {
+    byte[] get(java.net.URI uri, int limit) throws Exception;
+  }
+
+  private final Fetcher http;
   private final Installer installer;
   private final boolean development;
   private final ScheduledExecutorService worker =
@@ -60,12 +66,7 @@ public final class MuhaUpdater implements AutoCloseable {
     this(game, installed, development, new GitHubDownload()::get, new ExitUpdate(game, jar));
   }
 
-  MuhaUpdater(
-      Path game,
-      String installed,
-      boolean development,
-      SharedUpdater.Fetcher http,
-      Installer installer) {
+  MuhaUpdater(Path game, String installed, boolean development, Fetcher http, Installer installer) {
     this.game = game;
     this.http = http;
     this.installer = installer;

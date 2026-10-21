@@ -5,11 +5,14 @@ sourceSets.test.compileClasspath += sourceSets.sharedAgent.output
 sourceSets.test.runtimeClasspath += sourceSets.sharedAgent.output
 def agent = tasks.register('sharedAgentJar',Jar) {
     from sourceSets.sharedAgent.output
-    archiveFileName = 'muhashist-shared-update-agent.jar'
+    archiveFileName = 'muhashist-update-agent.jar'
     destinationDirectory = layout.buildDirectory.dir('shared-agent')
     manifest { attributes 'Main-Class':'net.spidiboost.muhashist.updates.BatchAgent','Implementation-Vendor':'SpidiBoost' }
 }
-processResources { from(agent) }
+processResources {
+    from(agent)
+    from(agent) { rename { 'muhashist-shared-update-agent.jar' } }
+}
 jar { from(sourceSets.sharedAgent.output) }
 test { dependsOn agent }
 tasks.named('sourcesJar') { from sourceSets.sharedAgent.allSource }

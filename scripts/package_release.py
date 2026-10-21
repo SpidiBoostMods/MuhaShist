@@ -55,16 +55,20 @@ with ZipFile(jar) as archive:
     assert not any("/qa/" in entry for entry in archive.namelist())
     assert "net/spidiboost/muhashist/HistoryCounter.class" in archive.namelist()
     assert "net/spidiboost/muhashist/CheckReply.class" in archive.namelist()
+    for removed in ("SharedUpdater", "ReserveUpdates", "RestartCommand", "RestartPolicy", "UpdateScreen"):
+        assert f"net/spidiboost/muhashist/updates/{removed}.class" not in archive.namelist()
+    assert "preLaunch" not in metadata["entrypoints"]
     assert "net/spidiboost/muhashist/mixin/IncomingMixin.class" in archive.namelist()
     assert "IncomingMixin" in json.loads(archive.read("muhashist.mixins.json"))["client"]
     for entry in archive.namelist():
         if entry.endswith(".class"):
             assert int.from_bytes(archive.read(entry)[6:8], "big") == 65
-    with ZipFile(BytesIO(archive.read("muhashist-shared-update-agent.jar"))) as agent:
+    with ZipFile(BytesIO(archive.read("muhashist-update-agent.jar"))) as agent:
         assert "net/spidiboost/muhashist/updates/BatchAgent.class" in agent.namelist()
         for entry in agent.namelist():
             if entry.endswith(".class"):
                 assert int.from_bytes(agent.read(entry)[6:8], "big") == 65
+    assert archive.read("muhashist-update-agent.jar") == archive.read("muhashist-shared-update-agent.jar")
 
 sha = hashlib.sha256(jar.read_bytes()).hexdigest()
 (root / "build/libs/muhashist-update.properties").write_text(

@@ -53,9 +53,6 @@ if(project.hasProperty('nativeCheck')) {
         doLast {
             def report=file('build/native/results.txt')
             if(!report.isFile()||!report.text.contains('PASS')||report.text.contains('FAIL'))throw new GradleException('Native verification failed')
-            def marker=file('build/native/restart-result.txt')
-            for(int i=0;i<200&&!marker.isFile();i++)Thread.sleep(50)
-            if(!marker.isFile()||!marker.text.contains('PASS'))throw new GradleException('Native updater restart fixture failed')
             def mods=file('build/native/updater-QA/Призма с пробелами/instances/Muha-QA/minecraft/mods')
             for(int i=0;i<200&&new File(mods,'muhashist-1.21.4-v0.0.0.jar').isFile();i++)Thread.sleep(50)
             if(new File(mods,'muhashist-1.21.4-v0.0.0.jar').exists()||!new File(mods,'muhashist-1.21.4-v0.0.1.jar').isFile())throw new GradleException('Native MuhaShist exit transaction failed')
