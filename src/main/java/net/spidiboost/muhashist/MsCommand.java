@@ -55,13 +55,14 @@ public record MsCommand(
       String value = parts[1].toLowerCase(Locale.ROOT);
       if (!value.equals("on")
           && !value.equals("off")
+          && !(first.equals("update") && value.equals("now"))
           && !(first.equals("clear")
               && value.matches("[0-9]+")
               && new BigInteger(value).signum() > 0))
         throw new IllegalArgumentException(
             first.equals("clear")
                 ? "Очистка: /ms clear on, off или положительное число."
-                : "Обновления: /ms update on или off.");
+                : "Обновления: /ms update on, off или now.");
       return simple(first.equals("clear") ? Action.CLEAR : Action.UPDATE, value);
     }
     if (parts.length != 3)

@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
+import net.minecraft.text.*;
 import net.spidiboost.muhashist.updates.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +26,10 @@ public final class MuhaClient implements ClientModInitializer {
   private MsFiles files;
   private HistoryCounter scan;
   private String configError = "";
-  private boolean clearRequested, manualUpdate;
-  private long updatePoll, updateDeadline, displayUntil;
+  private boolean clearRequested;
+  private long displayUntil;
+  private MuhaUpdater updater;
+  private String announcedDownload = "";
   private Object connection;
   private final IncomingLines incoming = new IncomingLines();
   private long receivedBans;
@@ -100,6 +103,32 @@ public final class MuhaClient implements ClientModInitializer {
             hud.draw(context, scan);
         });
     SharedUpdater.preserve("muhashist", () -> scan.stop(""));
+    var loader = FabricLoader.getInstance();
+    var installed = loader.getModContainer("muhashist").orElseThrow();
+    Path ownJar = null;
+    try {
+      var paths = installed.getOrigin().getPaths();
+      if (paths.size() == 1
+          && Files.isRegularFile(paths.getFirst())
+          && !Files.isSymbolicLink(paths.getFirst())
+          && paths
+              .getFirst()
+              .toRealPath()
+              .getParent()
+              .equals(loader.getGameDir().resolve("mods").toRealPath()))
+        ownJar = paths.getFirst().toRealPath();
+    } catch (java.io.IOException ignored) {
+    }
+    updater =
+        new MuhaUpdater(
+            loader.getGameDir(),
+            installed.getMetadata().getVersion().getFriendlyString(),
+            ownJar,
+            loader.isDevelopmentEnvironment());
+    ClientLifecycleEvents.CLIENT_STARTED.register(c -> updater.request(MuhaUpdater.Mode.ENTRY));
+    ClientPlayConnectionEvents.JOIN.register(
+        (handler, sender, c) -> updater.request(MuhaUpdater.Mode.ENTRY));
+    ClientLifecycleEvents.CLIENT_STOPPING.register(c -> updater.close());
     SharedUpdater.initialize();
   }
 
@@ -141,7 +170,10 @@ public final class MuhaClient implements ClientModInitializer {
                             } else if (text.matches("(?i)delay\\s+\\S*")) {
                               for (String value : List.of("0", "50", "100", "250", "500", "1000"))
                                 if (value.startsWith(part)) offset.suggest(value);
-                            } else if (text.matches("(?i)(?:update|clear)\\s+\\S*")) {
+                            } else if (text.matches("(?i)update\\s+\\S*")) {
+                              for (String value : List.of("on", "off", "now"))
+                                if (value.startsWith(part)) offset.suggest(value);
+                            } else if (text.matches("(?i)clear\\s+\\S*")) {
                               for (String value : List.of("on", "off"))
                                 if (value.startsWith(part)) offset.suggest(value);
                             } else if (text.matches("\\S+\\s+\\d*")) {
@@ -268,16 +300,47 @@ public final class MuhaClient implements ClientModInitializer {
   }
 
   private void update(String value) throws Exception {
-    if (!value.isEmpty()) {
-      RestartPolicy.set(client.runDirectory.toPath(), value.equals("on"));
-      SharedUpdater.preferenceChanged();
-      message("Автоперезапуск " + (value.equals("on") ? "вкл" : "выкл") + ".");
-      return;
+    if (value.equals("on") || value.equals("off")) updater.automatic(value.equals("on"));
+    var mode =
+        value.equals("now")
+            ? MuhaUpdater.Mode.NOW
+            : value.equals("on") ? MuhaUpdater.Mode.ENTRY : MuhaUpdater.Mode.STATUS;
+    updater.request(mode).thenAccept(state -> client.execute(() -> updateStatus(state)));
+  }
+
+  private void updateStatus(MuhaUpdater.Status state) {
+    String latest = state.latest().isEmpty() ? "не удалось проверить" : state.latest();
+    message(
+        "Автообновление "
+            + (updater.automatic() ? "вкл" : "выкл")
+            + " · установлена "
+            + state.installed()
+            + " · актуальная "
+            + latest);
+    if (state.state().equals("downloaded")) {
+      message("Версия " + state.latest() + " скачана. Применится после обычного выхода из игры.");
+      announcedDownload = state.latest();
+    } else if (state.outdated()) {
+      if (state.state().equals("unavailable"))
+        error("Обновление пока недоступно. Повторить: /ms update now.");
     }
-    SharedUpdater.requestCheck();
-    manualUpdate = true;
-    updatePoll = now() + 300;
-    updateDeadline = now() + 60000;
+    if (state.outdated()) updateLink(state);
+  }
+
+  private void updateLink(MuhaUpdater.Status state) {
+    Text link =
+        Text.literal("Скачать MuhaShist " + state.latest() + " → GitHub")
+            .styled(
+                style ->
+                    style
+                        .withColor(0x8be5d1)
+                        .withUnderline(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, state.link()))
+                        .withHoverEvent(
+                            new HoverEvent(
+                                HoverEvent.Action.SHOW_TEXT,
+                                Text.literal("Открыть последний релиз"))));
+    client.inGameHud.getChatHud().addMessage(MsTheme.message("").append(link));
   }
 
   private void help() {
@@ -285,7 +348,7 @@ public final class MuhaClient implements ClientModInitializer {
     message("/ms open · /ms stop");
     message("/ms clear on|off|число");
     message("/ms delay мс");
-    message("/ms update [on|off]");
+    message("/ms update [on|off|now]");
     message("/ms config dir|reload|load");
   }
 
@@ -327,27 +390,19 @@ public final class MuhaClient implements ClientModInitializer {
       }
     }
     clearChat();
-    if (manualUpdate && now() >= updatePoll) {
-      var state = SharedUpdater.status("muhashist");
-      if (!state.getOrDefault("state", "checking").equals("checking") || now() > updateDeadline) {
-        manualUpdate = false;
-        String version =
-            FabricLoader.getInstance()
-                .getModContainer("muhashist")
-                .orElseThrow()
-                .getMetadata()
-                .getVersion()
-                .getFriendlyString();
+    if (updater != null && client.player != null) {
+      var state = updater.status();
+      if (state.state().equals("downloaded") && !state.latest().equals(announcedDownload)) {
+        announcedDownload = state.latest();
         message(
-            "Версия "
-                + version
-                + " · GitHub "
-                + (state.getOrDefault("latest", "").isBlank() ? "нет данных" : state.get("latest"))
-                + " · перезапуск "
-                + (RestartPolicy.enabled(client.runDirectory.toPath()) ? "вкл" : "выкл"));
-        if (!Set.of("current", "development").contains(state.getOrDefault("state", "")))
-          message(state.getOrDefault("status", "Проверка пока недоступна."));
-      } else updatePoll = now() + 300;
+            "MuhaShist " + state.latest() + " скачан. Применится после обычного выхода из игры.");
+      } else if (!Set.of("checking", "downloading", "unavailable").contains(state.state())
+          && updater.remind(now())) {
+        message("Доступен MuhaShist " + state.latest() + " · установлена " + state.installed());
+        updateLink(state);
+        client.inGameHud.setTitleTicks(10, 60, 15);
+        client.inGameHud.setTitle(MsTheme.gradient("Взгляни в чат", true));
+      }
     }
   }
 

@@ -21,6 +21,7 @@ class ConfigAndCommandTest {
     for (String nick : new String[] {"open", "update", "clear", "stop", "config", "delay"})
       assertEquals(MsCommand.Action.START, MsCommand.parse(nick + " 100 1.10.26").action());
     assertEquals(MsCommand.Action.UPDATE, MsCommand.parse("update off").action());
+    assertEquals("now", MsCommand.parse("update NOW").value());
     assertEquals("21", MsCommand.parse("clear 21").value());
     assertEquals(MsCommand.Action.HELP, MsCommand.parse("").action());
     for (String raw :

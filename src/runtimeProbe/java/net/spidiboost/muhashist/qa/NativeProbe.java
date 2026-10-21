@@ -132,7 +132,17 @@ public final class NativeProbe implements ClientModInitializer {
                   .map(s -> s.getText())
                   .toList();
           require(delaySuggestions.containsAll(List.of("0", "100", "250", "1000")), "delay TAB");
+          var updates =
+              dispatcher
+                  .getCompletionSuggestions(dispatcher.parse(alias + " update ", null))
+                  .get()
+                  .getList()
+                  .stream()
+                  .map(s -> s.getText())
+                  .toList();
+          require(updates.containsAll(List.of("on", "off", "now")), "update TAB");
         }
+        checkUpdateCommands(client, mod);
         require(
             mod.config().delay() == 100 && mod.counter().delay() == 100, "default delay changed");
         client.getNetworkHandler().sendChatCommand("MS delay 250");
@@ -379,6 +389,10 @@ public final class NativeProbe implements ClientModInitializer {
         dir = game.resolve(".spidiboost-updates");
     Files.createDirectories(dir);
     Files.createDirectories(game.resolve("mods"));
+    net.spidiboost.muhashist.updates.NativeUpdateProbe.prepare(game);
+    pass(
+        "native MuhaShist off does not download; now publishes verified JAR with detached helper,"
+            + " keeps auto-download off and leaves Minecraft running");
     Path old = game.resolve("mods/6ubaaFP-1.21.4-0.0.0.jar"),
         next = game.resolve("mods/6ubaaFP-1.21.4-0.0.1.jar"),
         stage = dir.resolve("stage.jar"),
@@ -452,11 +466,15 @@ public final class NativeProbe implements ClientModInitializer {
     require(
         ModsDownload.owns(change) && BatchInstall.hash(old).equals(hash) && helper.isAlive(),
         "off changed live JAR or lost helper");
-    var chatField=client.inGameHud.getChatHud().getClass().getDeclaredField("messages");
+    var chatField = client.inGameHud.getChatHud().getClass().getDeclaredField("messages");
     chatField.setAccessible(true);
-    String notice=((List<?>)chatField.get(client.inGameHud.getChatHud())).getFirst().toString();
-    require(notice.contains("6ubaaFP")&&!notice.contains("MuhaShist"),"update announcement attributed to the wrong mod: "+notice);
-    pass("native MuhaShist coordinator announces only the updated 6ubaaFP; current MuhaShist is not claimed as updated");
+    String notice = ((List<?>) chatField.get(client.inGameHud.getChatHud())).getFirst().toString();
+    require(
+        notice.contains("6ubaaFP") && !notice.contains("MuhaShist"),
+        "update announcement attributed to the wrong mod: " + notice);
+    pass(
+        "native MuhaShist coordinator announces only the updated 6ubaaFP; current MuhaShist is not"
+            + " claimed as updated");
     pass(
         "native update off publishes only verified QA JAR, preserves old open process files, starts"
             + " detached READY helper");
@@ -467,5 +485,71 @@ public final class NativeProbe implements ClientModInitializer {
     pass(
         "native update on countdown and save hook; detached helper must install after this isolated"
             + " Minecraft exits");
+  }
+
+  private void checkUpdateCommands(MinecraftClient client, MuhaClient mod) throws Exception {
+    Path game = client.runDirectory.toPath();
+    boolean family = RestartPolicy.enabled(game);
+    mod.execute("update off");
+    require(!AutoDownload.enabled(game), "off did not persist");
+    require(RestartPolicy.enabled(game) == family, "Muha changed family restart preference");
+    mod.execute("update now");
+    var updaterField = MuhaClient.class.getDeclaredField("updater");
+    updaterField.setAccessible(true);
+    MuhaUpdater updater = (MuhaUpdater) updaterField.get(mod);
+    updater.request(MuhaUpdater.Mode.STATUS).get(5, java.util.concurrent.TimeUnit.SECONDS);
+    require(!updater.automatic(), "now enabled future downloads");
+    var statusField = MuhaUpdater.class.getDeclaredField("status");
+    statusField.setAccessible(true);
+    var remindersField = MuhaUpdater.class.getDeclaredField("reminders");
+    remindersField.setAccessible(true);
+    Object reminders = remindersField.get(updater);
+    var nextField = reminders.getClass().getDeclaredField("next");
+    nextField.setAccessible(true);
+    var tick = MuhaClient.class.getDeclaredMethod("tick");
+    tick.setAccessible(true);
+    var chatField = client.inGameHud.getChatHud().getClass().getDeclaredField("messages");
+    chatField.setAccessible(true);
+    client.inGameHud.getChatHud().clear(false);
+    String current =
+        FabricLoader.getInstance()
+            .getModContainer("muhashist")
+            .orElseThrow()
+            .getMetadata()
+            .getVersion()
+            .getFriendlyString();
+    statusField.set(updater, new MuhaUpdater.Status(current, "99.0.0", "available"));
+    for (int i = 0; i < 4; i++) {
+      nextField.setLong(reminders, 0);
+      tick.invoke(mod);
+      require(
+          ((List<?>) chatField.get(client.inGameHud.getChatHud())).size() == Math.min(i + 1, 3) * 2,
+          "update notification budget");
+    }
+    var title = client.inGameHud.getClass().getDeclaredField("title");
+    title.setAccessible(true);
+    require(
+        ((Text) title.get(client.inGameHud)).getString().equals("Взгляни в чат"),
+        "update title missing");
+    var messages = (List<?>) chatField.get(client.inGameHud.getChatHud());
+    Text latest =
+        (Text) messages.getFirst().getClass().getMethod("content").invoke(messages.getFirst());
+    var links = new ArrayList<String>();
+    latest.visit(
+        (style, text) -> {
+          if (style.getClickEvent() != null) links.add(style.getClickEvent().getValue());
+          return Optional.empty();
+        },
+        net.minecraft.text.Style.EMPTY);
+    require(
+        links.contains("https://github.com/SpidiBoostMods/MuhaShist/releases/latest"),
+        "GitHub link not clickable");
+    statusField.set(updater, new MuhaUpdater.Status(current, "", "development"));
+    mod.execute("update on");
+    require(AutoDownload.enabled(game), "on did not persist");
+    require(RestartPolicy.enabled(game) == family, "on changed family preference");
+    pass(
+        "native update on/off/now, TAB aliases, persistent isolated setting, clickable GitHub link,"
+            + " exact title and three-notification limit");
   }
 }

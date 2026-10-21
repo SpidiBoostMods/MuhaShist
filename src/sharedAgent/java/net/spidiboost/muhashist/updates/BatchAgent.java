@@ -17,7 +17,9 @@ public final class BatchAgent {
       log = dir.resolve("update.log");
       try (var channel =
               FileChannel.open(
-                  dir.resolve("update.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                  dir.resolve(muhaOnly(plan) ? "muhashist-update.lock" : "update.lock"),
+                  StandardOpenOption.CREATE,
+                  StandardOpenOption.WRITE);
           var lock = channel.tryLock()) {
         if (lock == null) throw new IllegalStateException("Update already pending");
 
@@ -44,7 +46,7 @@ public final class BatchAgent {
             "SpidiBoost: all prepared updates installed successfully.\n",
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND);
-        if (!plan.command().isEmpty() && RestartPolicy.enabled(plan.game())) {
+        if (!muhaOnly(plan) && !plan.command().isEmpty() && RestartPolicy.enabled(plan.game())) {
           Thread.sleep(1500);
           if (RestartPolicy.enabled(plan.game())) {
             new ProcessBuilder(plan.command())
@@ -87,5 +89,18 @@ public final class BatchAgent {
       } catch (Exception ignored) {
       }
     }
+  }
+
+  static boolean muhaOnly(BatchPlan plan) {
+    return plan.removals().isEmpty()
+        && !plan.changes().isEmpty()
+        && plan.changes().stream()
+            .allMatch(
+                change ->
+                    change
+                        .destination()
+                        .getFileName()
+                        .toString()
+                        .matches("muhashist-1\\.21\\.4-v[0-9]+\\.[0-9]+\\.[0-9]+\\.jar"));
   }
 }

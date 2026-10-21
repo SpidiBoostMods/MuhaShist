@@ -140,6 +140,7 @@ public final class SharedUpdater {
     var loader = FabricLoader.getInstance();
     var list = new ArrayList<Installed>();
     for (var spec : ModCatalog.ALL) {
+      if (spec.id().equals("muhashist")) continue;
       var found = loader.getModContainer(spec.id());
       if (found.isEmpty()) continue;
       var mod = found.get();
@@ -245,7 +246,8 @@ public final class SharedUpdater {
                   "Новая версия в mods; старая удалится после выхода. Без перезапуска.");
             }
         notice(
-            UpdateNotice.downloaded(pendingPlan.changes().stream().map(c->c.destination()).toList()),
+            UpdateNotice.downloaded(
+                pendingPlan.changes().stream().map(c -> c.destination()).toList()),
             false);
       } catch (IOException e) {
         LOG.warn("Could not publish prepared update to mods ({})", e.getClass().getSimpleName());

@@ -2,12 +2,8 @@ package net.spidiboost.muhashist.updates;
 
 import java.io.*;
 import java.net.*;
-import java.net.http.*;
-import java.nio.ByteBuffer;
-import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.Flow;
+import java.util.Set;
+import javax.net.ssl.HttpsURLConnection;
 
 public final class GitHubDownload {
   private static final Set<String> HOSTS =
@@ -16,86 +12,96 @@ public final class GitHubDownload {
           "release-assets.githubusercontent.com",
           "objects.githubusercontent.com",
           "github-releases.githubusercontent.com");
-  private final HttpClient http =
-      HttpClient.newBuilder()
-          .connectTimeout(Duration.ofSeconds(10))
-          .followRedirects(HttpClient.Redirect.NEVER)
-          .build();
+  private final Connections connections;
+  private final int connectTimeout, readTimeout, totalTimeout;
 
-  public byte[] get(URI address, int limit) throws Exception {
+  @FunctionalInterface
+  interface Connections {
+    HttpsURLConnection open(URI address) throws IOException;
+  }
+
+  public GitHubDownload() {
+    this(address -> (HttpsURLConnection) address.toURL().openConnection(), 10000, 10000, 45000);
+  }
+
+  GitHubDownload(Connections connections, int connectTimeout, int readTimeout, int totalTimeout) {
+    this.connections = connections;
+    this.connectTimeout = connectTimeout;
+    this.readTimeout = readTimeout;
+    this.totalTimeout = totalTimeout;
+  }
+
+  public byte[] get(URI address, int limit) throws IOException {
+    if (limit < 1) throw new IllegalArgumentException("Invalid download limit");
+    long deadline = System.nanoTime() + totalTimeout * 1_000_000L;
     for (int redirects = 0; redirects <= 5; redirects++) {
       if (!trusted(address)) throw new IOException("Unexpected release download host");
-      var request =
-          HttpRequest.newBuilder(address)
-              .timeout(Duration.ofSeconds(40))
-              .header("User-Agent", "SpidiBoost-SpidiCard-Updater")
-              .GET()
-              .build();
-      var future = http.sendAsync(request, ignored -> new LimitedBody(limit));
-      HttpResponse<byte[]> response;
+      checkInterrupted();
+      var connection = connections.open(address);
       try {
-        response = future.get(45, TimeUnit.SECONDS);
-      } catch (Exception e) {
-        future.cancel(true);
-        throw e;
+        connection.setConnectTimeout(remaining(deadline, connectTimeout));
+        connection.setReadTimeout(remaining(deadline, readTimeout));
+        connection.setInstanceFollowRedirects(false);
+        connection.setUseCaches(false);
+        connection.setRequestMethod("GET");
+        connection.setRequestProperty("User-Agent", "MuhaShist-Updater");
+        connection.setRequestProperty("Connection", "close");
+        connection.setRequestProperty("Accept-Encoding", "identity");
+        int status = connection.getResponseCode();
+        remaining(deadline, readTimeout);
+        if (Set.of(301, 302, 303, 307, 308).contains(status)) {
+          String location = connection.getHeaderField("Location");
+          if (location == null || location.isBlank()) throw new IOException("Missing redirect");
+          try {
+            address = address.resolve(location);
+          } catch (IllegalArgumentException e) {
+            throw new IOException("Invalid release redirect", e);
+          }
+          continue;
+        }
+        if (status != 200) throw new IOException("GitHub release HTTP " + status);
+        long length = connection.getContentLengthLong();
+        if (length > limit) throw new IOException("Release download exceeds size limit");
+        try (var input = connection.getInputStream();
+            var output = new ByteArrayOutputStream((int) Math.max(0, Math.min(length, 65536)))) {
+          byte[] buffer = new byte[Math.min(limit, 16384)];
+          while (true) {
+            checkInterrupted();
+            connection.setReadTimeout(remaining(deadline, readTimeout));
+            int count = input.read(buffer);
+            if (count < 0) break;
+            if (count > limit - output.size())
+              throw new IOException("Release download exceeds size limit");
+            output.write(buffer, 0, count);
+          }
+          remaining(deadline, readTimeout);
+          if (length >= 0 && output.size() != length) throw new EOFException("Incomplete release");
+          return output.toByteArray();
+        }
+      } finally {
+        connection.disconnect();
       }
-      if (Set.of(301, 302, 303, 307, 308).contains(response.statusCode())) {
-        address = address.resolve(response.headers().firstValue("location").orElseThrow());
-        continue;
-      }
-      if (response.statusCode() != 200)
-        throw new IOException("GitHub release HTTP " + response.statusCode());
-      return response.body();
     }
     throw new IOException("Too many release redirects");
   }
 
-  public static boolean trusted(URI uri) {
-    return "https".equals(uri.getScheme())
-        && HOSTS.contains(uri.getHost())
-        && uri.getUserInfo() == null
-        && (uri.getPort() == -1 || uri.getPort() == 443);
+  private static void checkInterrupted() throws InterruptedIOException {
+    if (Thread.currentThread().isInterrupted())
+      throw new InterruptedIOException("Download stopped");
   }
 
-  static final class LimitedBody implements HttpResponse.BodySubscriber<byte[]> {
-    private final int limit;
-    private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-    private final CompletableFuture<byte[]> result = new CompletableFuture<>();
-    private Flow.Subscription subscription;
+  private static int remaining(long deadline, int maximum) throws SocketTimeoutException {
+    long nanos = deadline - System.nanoTime();
+    if (nanos <= 0) throw new SocketTimeoutException("Release download timed out");
+    return (int) Math.min(maximum, Math.max(1, nanos / 1_000_000));
+  }
 
-    LimitedBody(int limit) {
-      this.limit = limit;
-    }
-
-    public CompletionStage<byte[]> getBody() {
-      return result;
-    }
-
-    public void onSubscribe(Flow.Subscription subscription) {
-      this.subscription = subscription;
-      subscription.request(1);
-    }
-
-    public void onNext(List<ByteBuffer> buffers) {
-      for (var buffer : buffers) {
-        if (buffer.remaining() > limit - bytes.size()) {
-          subscription.cancel();
-          result.completeExceptionally(new IOException("Release download exceeds size limit"));
-          return;
-        }
-        byte[] chunk = new byte[buffer.remaining()];
-        buffer.get(chunk);
-        bytes.writeBytes(chunk);
-      }
-      subscription.request(1);
-    }
-
-    public void onError(Throwable error) {
-      result.completeExceptionally(error);
-    }
-
-    public void onComplete() {
-      result.complete(bytes.toByteArray());
-    }
+  public static boolean trusted(URI uri) {
+    return "https".equalsIgnoreCase(uri.getScheme())
+        && uri.getHost() != null
+        && HOSTS.contains(uri.getHost().toLowerCase(java.util.Locale.ROOT))
+        && uri.getUserInfo() == null
+        && uri.getFragment() == null
+        && (uri.getPort() == -1 || uri.getPort() == 443);
   }
 }

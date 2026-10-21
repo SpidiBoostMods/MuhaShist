@@ -18,6 +18,13 @@ tasks.named('jar') { archiveFileName = "muhashist-1.21.4-v${project.version}-dev
 tasks.named('remapJar') { archiveFileName = "muhashist-1.21.4-v${project.version}.jar" }
 tasks.named('sourcesJar') { archiveFileName = "muhashist-1.21.4-v${project.version}-sources.jar" }
 tasks.named('remapSourcesJar') { archiveFileName = "muhashist-1.21.4-v${project.version}-sources.jar" }
+tasks.register('verifyRelease', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'net.spidiboost.muhashist.updates.ReleaseProbe'
+    args project.findProperty('releaseVersion') ?: project.version
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
 test { useJUnitPlatform(); maxHeapSize = '768m'; maxParallelForks = 1; javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) } }
 processResources { inputs.property 'version',project.version; filesMatching('fabric.mod.json') { expand 'version': project.version } }
 apply from: 'updater.gradle'
@@ -40,6 +47,7 @@ if(project.hasProperty('nativeCheck')) {
             file('build/native/results.txt').delete()
             file('build/native/config/ms.cfg').delete()
             file('build/native/config/ms.txt').delete()
+            file('build/native/config/muhashist-update.properties').delete()
             file('build/native/restart-result.txt').delete()
         }
         doLast {
@@ -48,6 +56,9 @@ if(project.hasProperty('nativeCheck')) {
             def marker=file('build/native/restart-result.txt')
             for(int i=0;i<200&&!marker.isFile();i++)Thread.sleep(50)
             if(!marker.isFile()||!marker.text.contains('PASS'))throw new GradleException('Native updater restart fixture failed')
+            def mods=file('build/native/updater-QA/Призма с пробелами/instances/Muha-QA/minecraft/mods')
+            for(int i=0;i<200&&new File(mods,'muhashist-1.21.4-v0.0.0.jar').isFile();i++)Thread.sleep(50)
+            if(new File(mods,'muhashist-1.21.4-v0.0.0.jar').exists()||!new File(mods,'muhashist-1.21.4-v0.0.1.jar').isFile())throw new GradleException('Native MuhaShist exit transaction failed')
         }
     }
 }
