@@ -79,7 +79,10 @@ class MuhaExitTest {
                   ready.completeExceptionally(e);
                 }
               });
-      assertEquals("READY", ready.get(20, TimeUnit.SECONDS));
+      String response = ready.get(20, TimeUnit.SECONDS);
+      assertNotNull(response);
+      assertTrue(response.startsWith("READY "));
+      var helper = ProcessHandle.of(Long.parseLong(response.substring(6))).orElseThrow();
       assertEquals(oldHash, BatchInstall.hash(old));
       assertEquals(newHash, BatchInstall.hash(next));
       assertTrue(client.isAlive());
@@ -87,6 +90,7 @@ class MuhaExitTest {
       client.getOutputStream().flush();
       assertTrue(client.waitFor(10, TimeUnit.SECONDS));
       assertEquals(0, client.exitValue());
+      helper.onExit().get(15, TimeUnit.SECONDS);
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
       while (Files.exists(old) && System.nanoTime() < deadline) Thread.sleep(25);
       assertFalse(Files.exists(old));
@@ -145,7 +149,9 @@ class MuhaExitTest {
         var update = new ExitUpdate(game, old);
         update.install(release, Files.readAllBytes(download));
         if (!update.ready("1.2.0")) throw new IOException("Helper not alive");
-        System.out.println("READY");
+        var helper = ExitUpdate.class.getDeclaredField("helper");
+        helper.setAccessible(true);
+        System.out.println("READY " + ((Process) helper.get(update)).pid());
         System.out.flush();
         System.in.read();
       }

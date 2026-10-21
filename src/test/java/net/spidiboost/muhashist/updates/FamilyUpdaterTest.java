@@ -372,8 +372,8 @@ class FamilyUpdaterTest {
         code,
         "import java.nio.file.*; public class Fixture {public static void main(String[] a)throws"
             + " Exception{if(a.length==0){System.out.println(\"LIVE\");System.out.flush();System.in.read();}else"
-            + " Files.writeString(Path.of(a[0]),\"restart\\n"
-            + "\",StandardOpenOption.CREATE,StandardOpenOption.APPEND);}}");
+            + " {Files.writeString(Path.of(a[0]+\".pid\"),Long.toString(ProcessHandle.current().pid()));Files.writeString(Path.of(a[0]),\"restart\\n"
+            + "\",StandardOpenOption.CREATE,StandardOpenOption.APPEND);}}}");
     Path javac =
         java.resolveSibling(
             System.getProperty("os.name").startsWith("Windows") ? "javac.exe" : "javac");
@@ -433,11 +433,17 @@ class FamilyUpdaterTest {
         for (int i = 0; i < 200 && (!Files.exists(marker) || Files.size(marker) == 0); i++)
           Thread.sleep(50);
         assertEquals("restart\n", Files.readString(marker));
+        var launched =
+            ProcessHandle.of(
+                Long.parseLong(Files.readString(marker.resolveSibling("restarted.txt.pid"))));
+        if (launched.isPresent()) launched.get().onExit().get(10, TimeUnit.SECONDS);
       } else assertFalse(Files.exists(marker));
       for (var c : p.changes()) assertEquals(c.newHash(), BatchInstall.hash(c.destination()));
     } finally {
       old.destroyForcibly();
       helper.destroyForcibly();
+      assertTrue(old.waitFor(5, TimeUnit.SECONDS));
+      assertTrue(helper.waitFor(5, TimeUnit.SECONDS));
     }
   }
 
