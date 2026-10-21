@@ -58,17 +58,14 @@ class MuhaExitTest {
     paths.add(Path.of("build/resources/main").toAbsolutePath().toString());
     Process client =
         new ProcessBuilder(
-                java,
-                "-cp",
-                String.join(File.pathSeparator, paths),
-                ClientFixture.class.getName(),
-                game.toString(),
-                old.toString(),
-                newFile.toString(),
-                newHash)
+                java, "-cp", String.join(File.pathSeparator, paths), ClientFixture.class.getName())
             .redirectError(ProcessBuilder.Redirect.INHERIT)
             .start();
     try {
+      var input = new DataOutputStream(client.getOutputStream());
+      for (String value : List.of(game.toString(), old.toString(), newFile.toString(), newHash))
+        input.writeUTF(value);
+      input.flush();
       var ready = new java.util.concurrent.CompletableFuture<String>();
       Thread.ofPlatform()
           .daemon()
@@ -134,16 +131,19 @@ class MuhaExitTest {
 
   public static final class ClientFixture {
     public static void main(String[] args) throws Exception {
-      Path game = Path.of(args[0]), old = Path.of(args[1]);
+      var input = new DataInputStream(System.in);
+      Path game = Path.of(input.readUTF()), old = Path.of(input.readUTF());
+      Path download = Path.of(input.readUTF());
+      String hash = input.readUTF();
       var mod =
           ModCatalog.ALL.stream()
               .filter(value -> value.id().equals("muhashist"))
               .findFirst()
               .orElseThrow();
-      var release = new Release(mod, "1.2.0", mod.artifact("1.2.0"), args[3]);
+      var release = new Release(mod, "1.2.0", mod.artifact("1.2.0"), hash);
       try (var loaded = new ZipFile(old.toFile())) {
         var update = new ExitUpdate(game, old);
-        update.install(release, Files.readAllBytes(Path.of(args[2])));
+        update.install(release, Files.readAllBytes(download));
         if (!update.ready("1.2.0")) throw new IOException("Helper not alive");
         System.out.println("READY");
         System.out.flush();
