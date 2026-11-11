@@ -50,7 +50,7 @@ class CounterTest {
     }
 
     void end() {
-      time += 2000;
+      time += 5100;
       counter.tick();
       assertNotNull(result, error);
     }
@@ -97,14 +97,10 @@ class CounterTest {
         "-- [2026-10-02 10:00] --\n"
             + "Role был забанен модератором SpidiBoost\n"
             + "По причине: Читы [Активный]");
-    run.time += 2000;
-    run.counter.tick();
-    assertEquals(List.of("Active"), run.requested);
-    run.counter.accept(
-        "Цель [Active]: забанена.\nЗабанил: SpidiBoost\nIP бан: no, Тихий: no, Навсегда: no");
-    run.time += 101;
+    run.time += 5100;
     run.counter.tick();
     run.end();
+    assertTrue(run.requested.isEmpty());
     assertEquals(List.of("Cutoff", "Active"), run.result.names());
     assertEquals("1,4", run.result.points());
     assertEquals(5, run.result.processed());
@@ -230,7 +226,7 @@ class CounterTest {
   void unrelatedChatDoesNotExtendOwnedReplyTimeoutAndStopDropsLatePackets() {
     var run = new Run();
     run.ban("A", "SpidiBoost", "Читы", "2026-10-02 12:00");
-    run.time = 2000;
+    run.time = 5100;
     run.counter.accept("[Игрок] Person » hello");
     run.counter.tick();
     assertNotNull(run.result);

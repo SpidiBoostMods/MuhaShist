@@ -332,39 +332,11 @@ public final class NativeProbe implements ClientModInitializer {
         receive(client, advanced.toString());
         phase = 5;
       } else if (phase == 5) {
-        if (!delayChanged && mod.counter().checking() && mod.counter().checked() == 0) {
-          delayChanged = true;
-          mod.execute("delay 250");
-          require(mod.counter().delay() == 250, "live delay command ignored");
-        }
-        if (!checkShot && mod.counter().checking() && mod.counter().checked() == 1) {
-          checkShot = true;
-          ScreenshotRecorder.saveScreenshot(
-              client.runDirectory, "muhashist-checks.png", client.getFramebuffer(), text -> {});
-        }
         if (mod.counter().active()) return;
-        require(mod.counter().points().equals("3,4"), "active/silent/owner/autofish native total");
-        require(
-            sent.stream()
-                .filter(s -> s.startsWith("checkban "))
-                .toList()
-                .equals(List.of("checkban Keep", "checkban Silent", "checkban Wrong")),
-            "active-only sequential commands or unexpected check for expired/autofish");
-        Path reportFile = FabricLoader.getInstance().getConfigDir().resolve("ms.txt");
-        if (!Files.readString(reportFile).contains("Баллы: 3,4")) return;
-        require(checkTimes.size() == 3, "missing checkban send timestamps");
-        long fastest = Long.MAX_VALUE;
-        for (int i = 1; i < checkTimes.size(); i++)
-          fastest = Math.min(fastest, checkTimes.get(i) - checkTimes.get(i - 1));
-        require(delayChanged && fastest >= 249, "live checkban delay was not respected");
-        pass(
-            "native live /ms delay 250, sequential checkban spacing: minimum "
-                + fastest
-                + " ms, no overlapping requests");
-        pass(
-            "actual active-only checkban commands, foreign curator/silent filtering, inactive score"
-                + " and ten-minute autofish grouping; evasion counts one point for active and"
-                + " expired bans");
+        require(mod.counter().points().equals("4,8"), "history score");
+        require(checkTimes.isEmpty(), "unexpected checkban");
+        if (!Files.readString(FabricLoader.getInstance().getConfigDir().resolve("ms.txt")).contains("Баллы: 4,8")) return;
+        pass("active and expired history with autofish counted without checkban");
         routeMessages = false;
         prepareUpdate(client);
         phase = 99;

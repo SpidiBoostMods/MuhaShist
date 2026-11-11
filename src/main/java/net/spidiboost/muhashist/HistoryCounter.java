@@ -75,11 +75,8 @@ public final class HistoryCounter {
   private BigDecimal total = BigDecimal.ZERO;
   private ScoreRules rules = ScoreRules.standard();
   private long fishWindow = 600000;
-  private final ArrayDeque<Ban> checks = new ArrayDeque<>();
-  private Ban checking;
-  private CheckReply reply;
-  private boolean historyDone;
-  private long checkStarted, lastCheck, checked, retries, checkDelay = 100;
+  private long checkDelay = 100;
+  private LocalDate until;
   private LocalDateTime date;
   private Ban current;
   private StringBuilder reason;
@@ -151,18 +148,6 @@ public final class HistoryCounter {
     fishWindow = window;
   }
 
-  public boolean checking() {
-    return historyDone && active;
-  }
-
-  public long checked() {
-    return checked;
-  }
-
-  public long checkCount() {
-    return checked + checks.size() + (checking == null ? 0 : 1);
-  }
-
   public void start(String curator, BigInteger limit, LocalDate since) {
     if (active) throw new IllegalStateException("Подсчёт уже идёт. Остановить: /ms stop.");
     if (!curator.matches("[A-Za-z0-9_]{1,16}") || limit.signum() <= 0 || since == null)
@@ -171,6 +156,7 @@ public final class HistoryCounter {
     this.limit = limit;
     this.expected = limit;
     this.since = since;
+    until = LocalDate.now();
     target = "";
     total = BigDecimal.ZERO;
     bans.clear();
@@ -179,12 +165,7 @@ public final class HistoryCounter {
     current = null;
     reason = null;
     date = null;
-    processed = counted = sinceClear = malformed = checked = retries = 0;
-    checks.clear();
-    checking = null;
-    reply = null;
-    historyDone = false;
-    lastCheck = 0;
+    processed = counted = sinceClear = malformed = 0;
     header = readingReason = false;
     started = lastOwned = clock.getAsLong();
     active = true;
@@ -202,10 +183,6 @@ public final class HistoryCounter {
 
   private void line(String text) {
     if (text.isEmpty() || text.contains("»")) return;
-    if (historyDone) {
-      checkLine(text);
-      return;
-    }
     String lower = text.toLowerCase(Locale.ROOT);
     var heading = HEADER.matcher(text);
     if (lower.startsWith("история персонала") && heading.find()) {
@@ -309,11 +286,7 @@ public final class HistoryCounter {
 
   private String reasonPart(String text) {
     var marker = STATUS.matcher(text);
-    if (marker.find()) {
-      if (marker.group(1).equalsIgnoreCase("активный")
-          || marker.group(1).equalsIgnoreCase("active")) current.activeBan = true;
-      return text.substring(0, marker.start());
-    }
+    if (marker.find()) return text.substring(0, marker.start());
     return text;
   }
 
@@ -345,7 +318,7 @@ public final class HistoryCounter {
     current = null;
     readingReason = false;
     ban.base =
-        ban.mine && ban.time != null && !ban.time.toLocalDate().isBefore(since)
+        ban.mine && ban.time != null && !ban.time.toLocalDate().isBefore(since) && !ban.time.toLocalDate().isAfter(until)
             ? rules.score(reason.toString())
             : BigDecimal.ZERO;
     ban.fish = ScoreRules.autofish(reason.toString());
@@ -405,18 +378,11 @@ public final class HistoryCounter {
   public void tick() {
     if (!active) return;
     long now = clock.getAsLong();
-    if (historyDone) {
-      if (checking == null) {
-        if (checks.isEmpty() || now - lastCheck >= checkDelay) nextCheck();
-      } else if (now - checkStarted >= 6000 && now - lastCheck >= checkDelay)
-        retryCheck("Неполный ответ /checkban " + checking.name + ".");
-      return;
-    }
     if (!header && now - started >= 10000) {
       stop("Нет ответа /shist за 10 секунд. Проверьте подключение и права.");
       return;
     }
-    if (header && now - lastOwned >= (processed == 0 && current == null ? 500 : 1800)) endHistory();
+    if (header && now - lastOwned >= 5000) endHistory();
   }
 
   public void stop(String error) {
@@ -424,15 +390,14 @@ public final class HistoryCounter {
   }
 
   public void finishNow() {
-    if (active && !historyDone) endHistory();
+    if (active) endHistory();
   }
 
   private void count(Ban ban) {
     if (!ban.counted
         && !ban.fish
         && !ban.manual
-        && ban.base.signum() > 0
-        && (!ban.activeBan || ban.verified)) {
+        && ban.base.signum() > 0) {
       total = total.add(ban.base);
       counted++;
       ban.counted = true;
@@ -441,63 +406,7 @@ public final class HistoryCounter {
 
   private void endHistory() {
     commit();
-    historyDone = true;
-    for (Ban ban : bans)
-      if (ban.activeBan
-          && ban.mine
-          && !ban.manual
-          && ban.time != null
-          && !ban.time.toLocalDate().isBefore(since)) checks.addLast(ban);
-    nextCheck();
-  }
-
-  private void nextCheck() {
-    if (!active) return;
-    checking = checks.pollFirst();
-    if (checking == null) {
-      finish(true, "");
-      return;
-    }
-    target = checking.name;
-    reply = new CheckReply(checking.name, curator);
-    retries = 0;
-    sendCheck();
-  }
-
-  private void retryCheck(String problem) {
-    if (++retries > 2) {
-      stop(problem + " Проверка остановлена; неподтверждённые баны не засчитаны.");
-      return;
-    }
-    reply = new CheckReply(checking.name, curator);
-    sendCheck();
-  }
-
-  private void sendCheck() {
-    checkStarted = clock.getAsLong();
-    lastCheck = checkStarted;
-    listener.check(checking.name);
-  }
-
-  private void checkLine(String text) {
-    if (checking == null || reply == null) return;
-    reply.accept(text);
-    switch (reply.state()) {
-      case WAITING -> {}
-      case ERROR -> stop(reply.error());
-      case RETRY -> {
-        checkStarted = clock.getAsLong() - 5000;
-        reply = new CheckReply(checking.name, curator);
-      }
-      case ACCEPT, REJECT -> {
-        checking.verified = reply.state() == CheckReply.State.ACCEPT;
-        count(checking);
-        checked++;
-        checking = null;
-        reply = null;
-        if (clear && checked % clearEvery == 0) listener.clearChat();
-      }
-    }
+    finish(true, "");
   }
 
   private void finish(boolean complete, String error) {
@@ -505,7 +414,7 @@ public final class HistoryCounter {
     LocalDateTime fishSince = null;
     for (Ban ban :
         bans.stream()
-            .filter(b -> b.fish && !b.manual && b.base.signum() > 0 && (!b.activeBan || b.verified))
+            .filter(b -> b.fish && !b.manual && b.base.signum() > 0)
             .sorted(Comparator.comparing(b -> b.time))
             .toList()) {
       if (fishSince == null
@@ -526,9 +435,6 @@ public final class HistoryCounter {
     waiting.clear();
     reason = null;
     current = null;
-    checks.clear();
-    checking = null;
-    reply = null;
     if (error.isEmpty() && malformed > 0)
       error = "Не разобрано записей: " + malformed + ". Не найдена дата или причина бана.";
     listener.finished(result, error);
@@ -554,7 +460,7 @@ public final class HistoryCounter {
     final LocalDateTime time;
     final boolean mine;
     BigDecimal base = BigDecimal.ZERO;
-    boolean manual, linked, activeBan, verified, fish, counted;
+    boolean manual, linked, fish, counted;
 
     Ban(String name, LocalDateTime time, boolean mine) {
       this.name = name;

@@ -54,7 +54,7 @@ with ZipFile(jar) as archive:
     assert "LICENSE" in archive.namelist()
     assert not any("/qa/" in entry for entry in archive.namelist())
     assert "net/spidiboost/muhashist/HistoryCounter.class" in archive.namelist()
-    assert "net/spidiboost/muhashist/CheckReply.class" in archive.namelist()
+    assert "net/spidiboost/muhashist/CheckReply.class" not in archive.namelist()
     for removed in ("SharedUpdater", "ReserveUpdates", "RestartCommand", "RestartPolicy", "UpdateScreen"):
         assert f"net/spidiboost/muhashist/updates/{removed}.class" not in archive.namelist()
     assert "preLaunch" not in metadata["entrypoints"]

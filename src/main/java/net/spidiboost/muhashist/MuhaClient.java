@@ -60,17 +60,6 @@ public final class MuhaClient implements ClientModInitializer {
                 clearRequested = true;
               }
 
-              public void check(String nickname) {
-                try {
-                  if (client.getNetworkHandler() == null)
-                    throw new IllegalStateException("Соединение потеряно.");
-                  LOG.debug("Checking active ban: {}", nickname);
-                  client.getNetworkHandler().sendChatCommand("checkban " + nickname);
-                } catch (Exception e) {
-                  scan.stop("Не удалось отправить /checkban " + nickname + ": " + e.getMessage());
-                }
-              }
-
               public void finished(HistoryCounter.Result result, String error) {
                 complete(result, error);
               }
@@ -267,7 +256,7 @@ public final class MuhaClient implements ClientModInitializer {
     if (config == null) throw new IllegalStateException(configError);
     if (!value.isEmpty()) config.delay(Long.parseLong(value));
     scan.delay(config.delay());
-    message("Задержка /checkban: " + config.delay() + " мс.");
+    message("Для подсчёта по /shist задержка не требуется.");
   }
 
   private void configure(String value) throws Exception {
@@ -349,18 +338,16 @@ public final class MuhaClient implements ClientModInitializer {
     message("/ms ник количество дата — подсчёт");
     message("/ms open · /ms stop");
     message("/ms clear on|off|число");
-    message("/ms delay мс");
     message("/ms update [on|off|now]");
     message("/ms config dir|reload|load");
   }
 
   private void complete(HistoryCounter.Result result, String problem) {
     LOG.info(
-        "History finished: curator={}, processed={}, checks={}, counted={}, points={}, complete={},"
+        "History finished: curator={}, processed={}, counted={}, points={}, complete={},"
             + " problem={}",
         result.curator(),
         result.processed(),
-        scan.checked(),
         result.counted(),
         result.points(),
         result.complete(),
