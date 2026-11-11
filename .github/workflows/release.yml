@@ -48,7 +48,8 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           test "$version" = "$(sed -n 's/^mod_version=//p' gradle.properties)"
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "MuhaShist $version" --notes-file CHANGELOG.md \
+          sed '1,2d' CHANGELOG.md > "$RUNNER_TEMP/muhashist-release-notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "MuhaShist $version · Fabric 1.21.4" --notes-file "$RUNNER_TEMP/muhashist-release-notes.md" \
             "build/libs/muhashist-1.21.4-v$version.jar" \
             "build/libs/muhashist-1.21.4-v$version-sources.jar" \
             "build/libs/muhashist-1.21.4-v$version-source.zip" \
