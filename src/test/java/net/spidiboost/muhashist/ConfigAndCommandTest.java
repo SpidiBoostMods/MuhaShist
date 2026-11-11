@@ -54,7 +54,7 @@ class ConfigAndCommandTest {
     loaded.save();
     assertEquals("untouched", Files.readString(directory.resolve("other.cfg")));
     assertTrue(Files.readString(directory.resolve("ms.cfg")).contains("# Положение GUI"));
-    assertTrue(Files.readString(directory.resolve("ms.cfg")).contains("# Причины и баллы"));
+    assertTrue(Files.readString(directory.resolve("ms.cfg")).contains("# Причины и количество качественных банов"));
   }
 
   @Test
@@ -79,7 +79,7 @@ class ConfigAndCommandTest {
     String text = Files.readString(file.file());
     assertEquals(4, text.lines().count());
     assertTrue(text.contains("Ник: SpidiBoost"));
-    assertTrue(text.contains("Баллы: 1,4"));
+    assertTrue(text.contains("Качественные баны: 1,4"));
     assertTrue(text.contains("Ники: Same Same"));
     assertFalse(text.contains("Читы"));
     assertFalse(text.contains("2026"));

@@ -34,4 +34,16 @@ public final class MsTheme {
   public static MutableText error(String text) {
     return gradient("[MuhaShist]", true).append(Text.literal(" " + text).withColor(0xffb3ba));
   }
+
+  public static MutableText result(HistoryCounter.Result result, String problem) {
+    boolean promotion = result.score().compareTo(new java.math.BigDecimal("3000")) >= 0;
+    Text hint = Text.literal("Никнейм: " + result.curator()
+        + "\nС даты: " + result.since().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.uuuu"))
+        + "\nПовышение: ")
+        .append(Text.literal(promotion ? "Разрешено" : "Не разрешено")
+            .withColor(promotion ? 0x8be5b0 : 0xffb3ba));
+    String label = "Качественные баны: " + result.points();
+    MutableText text = problem.isEmpty() ? message(label) : error(problem + " " + label);
+    return text.styled(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hint)));
+  }
 }

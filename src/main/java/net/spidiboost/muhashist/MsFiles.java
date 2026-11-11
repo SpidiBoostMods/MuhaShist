@@ -20,7 +20,7 @@ public final class MsFiles {
   public static String format(HistoryCounter.Result result) {
     return "Ник: "
         + result.curator()
-        + "\nБаллы: "
+        + "\nКачественные баны: "
         + result.points()
         + "\nЗасчитано банов: "
         + result.counted()

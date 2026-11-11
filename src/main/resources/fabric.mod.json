@@ -3,7 +3,7 @@
   "id": "muhashist",
   "version": "${version}",
   "name": "spidiboost.MuhaShist",
-  "description": "Подсчёт баллов по истории банов ReallyWorld.",
+  "description": "Подсчёт качественных банов по истории банов ReallyWorld.",
   "authors": ["SpidiBoost"],
   "license": "MIT",
   "environment": "client",

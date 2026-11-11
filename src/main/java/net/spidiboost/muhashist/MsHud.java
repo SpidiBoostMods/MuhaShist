@@ -115,9 +115,14 @@ public final class MsHud {
             x + 11 + i,
             y + 64,
             0xff000000 | MsTheme.blend(0xff6a9e, 0xffd78b, (double) i / Math.max(1, length - 1)));
-    String stats = "Проверено " + scan.processed() + " · баллы " + scan.points();
+    String stats = "Качественные баны: " + scan.points() + " · проверено " + scan.processed();
+    float statsScale = Math.min(1F, (float) (w - 20) / client.textRenderer.getWidth(stats));
+    c.getMatrices().push();
+    c.getMatrices().translate(x + 10, y + 73, 0);
+    c.getMatrices().scale(statsScale, statsScale, 1);
     c.drawTextWithShadow(
-        client.textRenderer, Text.literal(fit(stats, w - 20)), x + 10, y + 73, 0xe4d6df);
+        client.textRenderer, Text.literal(stats), 0, 0, 0xe4d6df);
+    c.getMatrices().pop();
     if (dragging) c.fill(x + 4, y + h - 2, x + w - 4, y + h - 1, 0x99ffbb86);
   }
 

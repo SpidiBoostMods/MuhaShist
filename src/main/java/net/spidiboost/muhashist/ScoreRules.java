@@ -92,7 +92,7 @@ public final class ScoreRules {
           throw new NumberFormatException();
       } catch (NumberFormatException e) {
         throw new IllegalArgumentException(
-            "Баллы: неотрицательное число, до 12 знаков после запятой.");
+            "Качественные баны: неотрицательное число, до 12 знаков после запятой.");
       }
       for (String item : match.group(1).split(";", -1)) {
         String reason = normalize(item);
@@ -100,7 +100,7 @@ public final class ScoreRules {
         BigDecimal previous = values.putIfAbsent(reason, score);
         if (previous != null && previous.compareTo(score) != 0)
           throw new IllegalArgumentException(
-              "Причина повторяется с разными баллами: " + item.strip());
+              "Причина повторяется с разным количеством качественных банов: " + item.strip());
       }
     }
     return new ScoreRules(values);

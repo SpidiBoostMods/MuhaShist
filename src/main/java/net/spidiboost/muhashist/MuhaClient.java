@@ -363,8 +363,7 @@ public final class MuhaClient implements ClientModInitializer {
             errorAsync("Не удалось сохранить config/ms.txt: " + e.getMessage());
           }
         });
-    if (!problem.isEmpty()) error(problem + " Баллы: " + result.points());
-    else message("Баллы: " + result.points());
+    client.inGameHud.getChatHud().addMessage(MsTheme.result(result, problem));
   }
 
   private void tick() {

@@ -142,6 +142,8 @@ public final class NativeProbe implements ClientModInitializer {
                   .toList();
           require(updates.containsAll(List.of("on", "off", "now")), "update TAB");
         }
+        ResultTextChecks.run();
+        pass("result hover: exact 3000 threshold, fractions, labels, date, curator and inherited styles");
         checkUpdateCommands(client, mod);
         require(
             mod.config().delay() == 100 && mod.counter().delay() == 100, "default delay changed");
@@ -280,13 +282,31 @@ public final class NativeProbe implements ClientModInitializer {
             client.inGameHud.getChatHud().getMessageHistory().contains("/qa-preserved"),
             "chat clear removed input history");
         Path result = FabricLoader.getInstance().getConfigDir().resolve("ms.txt");
-        if (!Files.exists(result) || !Files.readString(result).contains("Баллы: 85000")) return;
+        if (!Files.exists(result) || !Files.readString(result).contains("Качественные баны: 85000")) return;
         String text = Files.readString(result);
         require(
             text.lines().count() == 4
                 && text.contains("Засчитано банов: 100000")
                 && !text.contains("Хранение"),
             "result fields wrong");
+        var chatField = client.inGameHud.getChatHud().getClass().getDeclaredField("messages");
+        chatField.setAccessible(true);
+        var messages = (List<?>) chatField.get(client.inGameHud.getChatHud());
+        Text output = (Text) messages.getFirst().getClass().getMethod("content").invoke(messages.getFirst());
+        require(output.getString().contains("Качественные баны: 85000"), "actual result label");
+        Text resultHint = output.getStyle().getHoverEvent().getValue(net.minecraft.text.HoverEvent.Action.SHOW_TEXT);
+        require(resultHint.getString().equals("Никнейм: SpidiBoost\nС даты: 01.10.2026\nПовышение: Разрешено"), "actual result hover");
+        client.setScreen(new ChatScreen(""));
+        boolean hoverFound = false;
+        for(int y=0;y<client.getWindow().getScaledHeight()&&!hoverFound;y+=3)
+          for(int x=0;x<client.getWindow().getScaledWidth()&&!hoverFound;x+=3) {
+            var style=client.inGameHud.getChatHud().getTextStyleAt(x,y);
+            if(style!=null&&style.getHoverEvent()!=null
+                && style.getHoverEvent().getValue(net.minecraft.text.HoverEvent.Action.SHOW_TEXT).getString().equals(resultHint.getString()))hoverFound=true;
+          }
+        require(hoverFound, "hover unavailable through actual ChatHud hit testing");
+        client.setScreen(null);
+        pass("actual result message, ChatHud hover hit testing and promotion tooltip");
         pass(
             "100000 records through real game-message mixin and sliced UI queue: 85000 exact"
                 + " points, repeated names retained, actual chat clears, 4-field ms.txt saved");
@@ -335,7 +355,7 @@ public final class NativeProbe implements ClientModInitializer {
         if (mod.counter().active()) return;
         require(mod.counter().points().equals("4,8"), "history score");
         require(checkTimes.isEmpty(), "unexpected checkban");
-        if (!Files.readString(FabricLoader.getInstance().getConfigDir().resolve("ms.txt")).contains("Баллы: 4,8")) return;
+        if (!Files.readString(FabricLoader.getInstance().getConfigDir().resolve("ms.txt")).contains("Качественные баны: 4,8")) return;
         pass("active and expired history with autofish counted without checkban");
         routeMessages = false;
         prepareUpdate(client);
